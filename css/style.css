@@ -1858,7 +1858,7 @@ button {
 
     margin: 0 0 20px;
 
-    color: var(--white);
+    color: var(--cream);
 
     font-family: "Playfair Display", serif;
 
@@ -1880,7 +1880,7 @@ button {
 
     max-width: 500px;
 
-    color: #f3e9df;
+    color: var(--cream);
 
     font-size: 15px;
 
@@ -2882,7 +2882,9 @@ body {
 
 .product-card,
 .menu-product-card,
-.job-card,
+.job-card:first-child {
+    background: var(--latte);
+}
 .testimonial-card {
     background: rgba(248, 241, 232, 0.88);
 }

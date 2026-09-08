@@ -3,16 +3,16 @@ require_once "config/database.php";
 
 $name = "Cafelia Admin";
 $email = "adminlea@cafelia.com";
-$password = "adminlea123";
+$password = password_hash("adminlea123", PASSWORD_DEFAULT);
 
-$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+$stmt = $conn->prepare(
+    "INSERT INTO admin_users (name, email, password) VALUES (?, ?, ?)"
+);
 
-$sql = "INSERT INTO admin_users (name, email, password) VALUES (?, ?, ?)";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("sss", $name, $email, $hashedPassword);
+$stmt->bind_param("sss", $name, $email, $password);
 
 if ($stmt->execute()) {
-    echo "Admin account created successfully!";
+    echo "Admin created successfully!";
 } else {
     echo "Error: " . $stmt->error;
 }

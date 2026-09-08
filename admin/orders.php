@@ -220,122 +220,14 @@ $error_message = isset($_GET["error"]);
             font: inherit;
         }
 
-        /* SIDEBAR */
-
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            height: 100vh;
-            padding: 28px 18px;
-            background: linear-gradient(
-                180deg,
-                var(--espresso-dark),
-                var(--espresso)
-            );
-            color: white;
-            z-index: 100;
-        }
-
-        .brand {
-            padding: 8px 14px 30px;
-            border-bottom: 1px solid rgba(255,255,255,.10);
-        }
-
-        .brand h2 {
-            font-family: "Playfair Display", serif;
-            font-size: 29px;
-            letter-spacing: .02em;
-        }
-
-        .brand p {
-            margin-top: 4px;
-            color: rgba(255,255,255,.48);
-            font-size: 11px;
-            letter-spacing: .14em;
-            text-transform: uppercase;
-        }
-
-        .admin-label {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 22px 10px 14px;
-            color: rgba(255,255,255,.48);
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: .13em;
-            text-transform: uppercase;
-        }
-
-        .admin-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #9bc79f;
-            box-shadow: 0 0 0 4px rgba(155,199,159,.10);
-        }
-
-        .nav {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .nav a {
-            display: flex;
-            align-items: center;
-            gap: 13px;
-            min-height: 48px;
-            padding: 0 14px;
-            border: 1px solid transparent;
-            border-radius: 13px;
-            color: rgba(255,255,255,.67);
-            font-size: 13px;
-            font-weight: 600;
-            transition: .2s ease;
-        }
-
-        .nav a:hover {
-            background: rgba(255,255,255,.07);
-            color: white;
-        }
-
-        .nav a.active {
-            background: rgba(255,255,255,.11);
-            border-color: rgba(255,255,255,.08);
-            color: white;
-        }
-
-        .nav-icon {
-            width: 28px;
-            height: 28px;
-            display: grid;
-            place-items: center;
-            border-radius: 9px;
-            background: rgba(255,255,255,.06);
-            font-size: 13px;
-        }
-
-        .nav a.active .nav-icon {
-            background: var(--caramel);
-        }
-
-        .nav-spacer {
-            height: 16px;
-        }
-
-        .nav-divider {
-            height: 1px;
-            margin: 10px 10px 12px;
-            background: rgba(255,255,255,.08);
-        }
-
         /* MAIN */
 
         .main {
-            margin-left: 250px;
+            width: calc(100% - 260px);
+        }
+
+        .main {
+            margin-left: 260px;
             min-height: 100vh;
             padding: 34px 38px 50px;
         }
@@ -796,29 +688,9 @@ $error_message = isset($_GET["error"]);
                 grid-template-columns: repeat(3, 1fr);
             }
         }
-
         @media (max-width: 900px) {
-            .sidebar {
-                position: static;
-                width: 100%;
-                height: auto;
-            }
-
-            .brand {
-                padding-bottom: 20px;
-            }
-
-            .nav {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-            }
-
-            .nav-divider,
-            .nav-spacer {
-                display: none;
-            }
-
             .main {
+                width: 100%;
                 margin-left: 0;
                 padding: 25px 20px 40px;
             }
@@ -871,7 +743,12 @@ $error_message = isset($_GET["error"]);
 </head>
 
 <body>
-
+    
+<?php
+    $active_admin_page = "orders";
+    include "sidebar.php";
+    ?>
+    
 <?php if ($updated): ?>
     <div class="toast">
         ✓ Order status updated successfully.
@@ -884,63 +761,8 @@ $error_message = isset($_GET["error"]);
     </div>
 <?php endif; ?>
 
+    
 
-<!-- SIDEBAR -->
-
-<aside class="sidebar">
-
-    <div class="brand">
-        <h2>Cafelia</h2>
-        <p>Management System</p>
-    </div>
-
-    <div class="admin-label">
-        <span class="admin-dot"></span>
-        Admin Panel
-    </div>
-
-    <nav class="nav">
-
-        <a href="dashboard.php">
-            <span class="nav-icon">⌂</span>
-            Dashboard
-        </a>
-
-        <a href="products.php">
-            <span class="nav-icon">☕</span>
-            Products
-        </a>
-
-        <a href="orders.php" class="active">
-            <span class="nav-icon">▤</span>
-            Orders
-        </a>
-
-        <a href="customers.php">
-            <span class="nav-icon">♙</span>
-            Customers
-        </a>
-
-        <a href="reports.php">
-            <span class="nav-icon">▥</span>
-            Reports
-        </a>
-
-        <div class="nav-divider"></div>
-
-        <a href="../index.php">
-            <span class="nav-icon">↗</span>
-            View Website
-        </a>
-
-        <a href="../logout.php">
-            <span class="nav-icon">⇥</span>
-            Logout
-        </a>
-
-    </nav>
-
-</aside>
 
 
 <!-- MAIN -->

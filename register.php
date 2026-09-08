@@ -915,7 +915,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <div class="brand-content">
 
                 <a href="index.php" class="brand-logo">
-                    CAFELIA
+                  <a href="index.php" class="logo"><img src="image/logo.png" alt="Cafelia"></a>
                 </a>
 
                 <p class="eyebrow">

@@ -200,215 +200,10 @@ if ($count_result) {
                 );
         }
 
-        /* SIDEBAR */
-
-        .sidebar {
-            position: fixed;
-
-            top: 0;
-            left: 0;
-
-            width: 255px;
-            height: 100vh;
-
-            padding: 30px 18px;
-
-            display: flex;
-            flex-direction: column;
-
-            background:
-                linear-gradient(
-                    160deg,
-                    var(--espresso),
-                    #3b2418
-                );
-
-            color: white;
-
-            box-shadow:
-                8px 0 35px rgba(36,21,15,.10);
-
-            z-index: 10;
-        }
-
-        .brand {
-            padding: 10px 14px 30px;
-        }
-
-        .brand h1 {
-            font-family:
-                "Playfair Display",
-                Georgia,
-                serif;
-
-            font-size: 31px;
-
-            letter-spacing: .05em;
-        }
-
-        .brand p {
-            margin-top: 6px;
-
-            color: rgba(255,255,255,.43);
-
-            font-size: 10px;
-            font-weight: 700;
-
-            letter-spacing: .15em;
-
-            text-transform: uppercase;
-        }
-
-        .admin-box {
-            margin: 0 6px 25px;
-
-            padding: 13px;
-
-            display: flex;
-            align-items: center;
-
-            gap: 11px;
-
-            border:
-                1px solid rgba(255,255,255,.09);
-
-            border-radius: 15px;
-
-            background:
-                rgba(255,255,255,.06);
-
-            backdrop-filter: blur(12px);
-        }
-
-        .admin-avatar {
-            width: 40px;
-            height: 40px;
-
-            display: grid;
-            place-items: center;
-
-            flex-shrink: 0;
-
-            border-radius: 12px;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    var(--gold),
-                    var(--caramel)
-                );
-
-            font-weight: 800;
-        }
-
-        .admin-info {
-            min-width: 0;
-        }
-
-        .admin-info strong {
-            display: block;
-
-            overflow: hidden;
-
-            color: white;
-
-            font-size: 12px;
-
-            white-space: nowrap;
-            text-overflow: ellipsis;
-        }
-
-        .admin-info span {
-            display: block;
-
-            margin-top: 3px;
-
-            color: rgba(255,255,255,.40);
-
-            font-size: 9px;
-            font-weight: 700;
-
-            letter-spacing: .08em;
-
-            text-transform: uppercase;
-        }
-
-        .nav {
-            display: flex;
-            flex-direction: column;
-
-            gap: 5px;
-        }
-
-        .nav a {
-            display: flex;
-            align-items: center;
-
-            gap: 12px;
-
-            padding: 13px 15px;
-
-            border-radius: 12px;
-
-            color: rgba(255,255,255,.60);
-
-            font-size: 13px;
-            font-weight: 600;
-
-            text-decoration: none;
-
-            transition: .2s ease;
-        }
-
-        .nav a:hover {
-            color: white;
-
-            background:
-                rgba(255,255,255,.07);
-
-            transform: translateX(2px);
-        }
-
-        .nav a.active {
-            color: white;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(185,130,82,.46),
-                    rgba(90,56,39,.62)
-                );
-
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,.10);
-        }
-
-        .nav-icon {
-            width: 23px;
-
-            text-align: center;
-
-            font-size: 15px;
-        }
-
-        .sidebar-bottom {
-            margin-top: auto;
-        }
-
-        .logout {
-            margin-top: 12px;
-
-            padding-top: 18px !important;
-
-            border-top:
-                1px solid rgba(255,255,255,.08);
-
-        }
-
         /* MAIN */
 
         .main {
-            margin-left: 255px;
+            margin-left: 260px;
 
             min-height: 100vh;
 
@@ -1031,70 +826,29 @@ if ($count_result) {
 
         /* MOBILE */
 
-        @media (max-width: 1050px) {
-
-            .sidebar {
-                width: 220px;
-            }
-
+        @media (max-width: 1100px) {
             .main {
-                margin-left: 220px;
-
                 padding: 30px;
             }
 
             .mini-stats {
-                grid-template-columns:
-                    repeat(2, 1fr);
+                grid-template-columns: repeat(2, 1fr);
             }
 
             .panel-top {
                 align-items: flex-start;
-
                 flex-direction: column;
             }
-
         }
 
-        @media (max-width: 760px) {
-
-            .sidebar {
-                position: static;
-
-                width: 100%;
-                height: auto;
-
-                padding: 18px;
-            }
-
-            .brand {
-                padding: 5px 8px 18px;
-            }
-
-            .admin-box {
-                margin-bottom: 15px;
-            }
-
-            .nav {
-                display: grid;
-
-                grid-template-columns:
-                    repeat(2, 1fr);
-            }
-
-            .sidebar-bottom {
-                margin-top: 8px;
-            }
-
+        @media (max-width: 900px) {
             .main {
                 margin-left: 0;
-
                 padding: 25px 18px;
             }
 
             .header {
                 align-items: flex-start;
-
                 flex-direction: column;
             }
 
@@ -1104,10 +858,8 @@ if ($count_result) {
 
             .add-button {
                 width: 100%;
-
                 justify-content: center;
             }
-
         }
 
         @media (max-width: 500px) {
@@ -1139,146 +891,24 @@ if ($count_result) {
 </head>
 
 <body>
+        <?php
+    $active_admin_page = "products";
+    include "sidebar.php";
+    ?>
 
-<!-- SIDEBAR -->
+    <main class="main">
 
-<aside class="sidebar">
-
-    <div class="brand">
-
-        <h1>Cafelia</h1>
-
-        <p>Admin Management</p>
-
-    </div>
-
-
-    <div class="admin-box">
-
-        <div class="admin-avatar">
-
-            <?php
-            echo strtoupper(
-                substr(
-                    $_SESSION["admin_name"] ?? "A",
-                    0,
-                    1
-                )
-            );
-            ?>
-
-        </div>
-
-        <div class="admin-info">
-
-            <strong>
-                <?php
-                echo htmlspecialchars(
-                    $_SESSION["admin_name"] ?? "Administrator"
-                );
-                ?>
-            </strong>
-
-            <span>
-                Administrator
-            </span>
-
-        </div>
-
-    </div>
-
-
-    <nav class="nav">
-
-        <a href="dashboard.php">
-            <span class="nav-icon">⌂</span>
-            Dashboard
-        </a>
-
-        <a
-            href="products.php"
-            class="active"
-        >
-            <span class="nav-icon">☕</span>
-            Products
-        </a>
-
-        <a href="orders.php">
-            <span class="nav-icon">▣</span>
-            Orders
-        </a>
-
-        <a href="customers.php">
-            <span class="nav-icon">♙</span>
-            Customers
-        </a>
-
-        <a href="reports.php">
-            <span class="nav-icon">▤</span>
-            Reports
-        </a>
-
-    </nav>
-
-
-    <div class="sidebar-bottom">
-
-        <nav class="nav">
-
-            <a href="../index.php">
-                <span class="nav-icon">↗</span>
-                View Website
-            </a>
-
-            <a
-                href="../logout.php"
-                class="logout"
-            >
-                <span class="nav-icon">⇥</span>
-                Logout
-            </a>
-
-        </nav>
-
-    </div>
-
-</aside>
-
-
-<!-- MAIN -->
-
-<main class="main">
-
-    <header class="header">
-
-        <div>
-
-            <div class="eyebrow">
-                Cafelia Management
+        <header class="header">
+            <div>
+                <div class="eyebrow">Cafelia Admin</div>
+                <h2>Products</h2>
+                <p>Manage your coffee products, pricing, inventory, and availability.</p>
             </div>
 
-            <h2>
-                Products
-            </h2>
-
-            <p>
-                Manage your coffee products, pricing, inventory,
-                and availability.
-            </p>
-
-        </div>
-
-
-        <a
-            href="add-product.php"
-            class="add-button"
-        >
-            <span>＋</span>
-            Add Product
-        </a>
-
-    </header>
-
+            <a href="add-product.php" class="add-button">
+                <span>＋</span> Add Product
+            </a>
+        </header>
 
     <!-- MINI STATS -->
 

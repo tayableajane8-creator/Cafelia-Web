@@ -557,6 +557,50 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 0 0 0 4px rgba(185,130,82,.12);
         }
 
+        .password-field {
+            position: relative;
+        }
+
+        .password-field input {
+            padding-right: 54px;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--caramel);
+            cursor: pointer;
+            transition: .2s ease;
+        }
+
+        .toggle-password:hover {
+            background: rgba(185, 130, 82, .09);
+        }
+
+        .toggle-password:focus-visible {
+            outline: 2px solid var(--caramel);
+            outline-offset: 2px;
+        }
+
+        .toggle-password svg {
+            width: 19px;
+            height: 19px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
         .login-button {
             width: 100%;
             min-height: 54px;
@@ -749,7 +793,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     href="index.php"
                     class="brand-logo"
                 >
-                    CAFELIA
+                   <a href="index.php" class="logo"><img src="image/logo.png" alt="Cafelia"></a>
                 </a>
 
                 <div class="eyebrow">
@@ -839,14 +883,32 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             Password
                         </label>
 
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            placeholder="Enter your password"
-                            autocomplete="current-password"
-                            required
-                        >
+                        <div class="password-field">
+
+                            <input
+                                type="password"
+                                id="password"
+                                name="password"
+                                placeholder="Enter your password"
+                                autocomplete="current-password"
+                                required
+                            >
+
+                            <button
+                                type="button"
+                                class="toggle-password"
+                                data-target="password"
+                                aria-label="Show password"
+                                aria-pressed="false"
+                                title="Show password"
+                            >
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                                    <circle cx="12" cy="12" r="2.5"></circle>
+                                </svg>
+                            </button>
+
+                        </div>
 
                     </div>
 
@@ -890,6 +952,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </section>
 
     </main>
+
+    <script>
+        document.querySelectorAll(".toggle-password").forEach(function (button) {
+            button.addEventListener("click", function () {
+                const input = document.getElementById(
+                    button.getAttribute("data-target")
+                );
+
+                if (!input) return;
+
+                const isHidden = input.type === "password";
+                input.type = isHidden ? "text" : "password";
+
+                button.setAttribute(
+                    "aria-label",
+                    isHidden ? "Hide password" : "Show password"
+                );
+                button.setAttribute(
+                    "title",
+                    isHidden ? "Hide password" : "Show password"
+                );
+                button.setAttribute(
+                    "aria-pressed",
+                    isHidden ? "true" : "false"
+                );
+
+                button.innerHTML = isHidden
+                    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"></path><path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6.5 0 10 6 10 6a18.2 18.2 0 0 1-3.1 3.8"></path><path d="M6.5 8.2C3.8 10 2 12 2 12s3.5 6 10 6c1.6 0 3-.3 4.2-.8"></path><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"></path></svg>'
+                    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>';
+            });
+        });
+    </script>
 
 </body>
 

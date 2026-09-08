@@ -1,5 +1,131 @@
 <?php
+declare(strict_types=1);
+
 session_start();
+
+require_once "config/database.php";
+
+$active_page = "contact";
+
+$success = "";
+$error = "";
+
+$form = [
+    "name" => "",
+    "email" => "",
+    "subject" => "",
+    "message" => ""
+];
+
+/*
+|--------------------------------------------------------------------------
+| CONTACT FORM SUBMISSION
+|--------------------------------------------------------------------------
+*/
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    $form["name"] = trim($_POST["name"] ?? "");
+    $form["email"] = trim($_POST["email"] ?? "");
+    $form["subject"] = trim($_POST["subject"] ?? "");
+    $form["message"] = trim($_POST["message"] ?? "");
+
+    if (
+        $form["name"] === "" ||
+        $form["email"] === "" ||
+        $form["subject"] === "" ||
+        $form["message"] === ""
+    ) {
+        $error = "Please fill in all fields before sending your message.";
+
+    } elseif (!filter_var($form["email"], FILTER_VALIDATE_EMAIL)) {
+        $error = "Please enter a valid email address.";
+
+    } elseif (mb_strlen($form["name"]) > 100) {
+        $error = "Your name is too long.";
+
+    } elseif (mb_strlen($form["email"]) > 150) {
+        $error = "Your email address is too long.";
+
+    } elseif (mb_strlen($form["subject"]) > 200) {
+        $error = "Your subject is too long.";
+
+    } else {
+
+        $stmt = $conn->prepare(
+            "INSERT INTO contact_messages
+            (name, email, subject, message)
+            VALUES (?, ?, ?, ?)"
+        );
+
+        if (!$stmt) {
+            error_log(
+                "Cafelia contact form prepare error: " .
+                $conn->error
+            );
+
+            $error = "We couldn't send your message right now. Please try again.";
+
+        } else {
+
+            $stmt->bind_param(
+                "ssss",
+                $form["name"],
+                $form["email"],
+                $form["subject"],
+                $form["message"]
+            );
+
+            if ($stmt->execute()) {
+
+                $stmt->close();
+
+                /*
+                 * Redirect after a successful submission so refreshing
+                 * the page does not submit the same message again.
+                 */
+                header("Location: contact.php?sent=1");
+                exit();
+
+            } else {
+
+                error_log(
+                    "Cafelia contact form execute error: " .
+                    $stmt->error
+                );
+
+                $error = "We couldn't send your message right now. Please try again.";
+                $stmt->close();
+            }
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| SUCCESS MESSAGE
+|--------------------------------------------------------------------------
+*/
+if (
+    $_SERVER["REQUEST_METHOD"] === "GET" &&
+    isset($_GET["sent"]) &&
+    $_GET["sent"] === "1"
+) {
+    $success = "Thank you! Your message has been sent successfully.";
+}
+
+/*
+|--------------------------------------------------------------------------
+| ESCAPE OUTPUT
+|--------------------------------------------------------------------------
+*/
+function e(string $value): string
+{
+    return htmlspecialchars(
+        $value,
+        ENT_QUOTES,
+        "UTF-8"
+    );
+}
 ?>
 
 <!DOCTYPE html>
@@ -48,428 +174,6 @@ body {
     background: var(--contact-cream);
     color: var(--contact-espresso);
 }
-
-/* =========================================================
-   NAVBAR — SAME CAFELIA STYLE
-========================================================= */
-
-.navbar {
-    position: sticky !important;
-    top: 0;
-    z-index: 9999;
-    width: 100%;
-    background: rgba(36, 21, 15, .97) !important;
-    border-bottom: 1px solid rgba(214, 173, 130, .18);
-    box-shadow: 0 8px 30px rgba(20, 10, 5, .12);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-}
-
-.nav-container {
-    width: 100%;
-    max-width: 1380px;
-    min-height: 82px;
-    margin: 0 auto;
-    padding: 0 42px;
-    display: flex;
-    align-items: center;
-}
-
-.logo {
-    min-width: 145px;
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
-}
-
-.logo-text {
-    display: inline-block;
-    font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-    font-size: 27px;
-    font-weight: 700;
-    letter-spacing: 4px;
-    line-height: 1;
-    color: #f8f1e8;
-    white-space: nowrap;
-}
-
-.nav-menu {
-    margin-left: auto;
-    margin-right: 30px;
-    display: flex;
-    align-items: center;
-    gap: 34px;
-}
-
-.nav-menu a {
-    position: relative;
-    color: rgba(255,255,255,.88);
-    font-family: "DM Sans", Arial, sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.25px;
-    line-height: 1;
-    text-decoration: none;
-    text-transform: uppercase;
-}
-
-.nav-menu a:hover,
-.nav-menu a.active {
-    color: #d8b892;
-}
-
-.nav-menu a.active::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -8px;
-    height: 2px;
-    border-radius: 2px;
-    background: #d8b892;
-}
-
-.nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.nav-actions a {
-    min-height: 38px;
-    padding: 9px 15px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-decoration: none;
-    text-transform: uppercase;
-}
-
-.nav-cart {
-    border: 1px solid rgba(214,173,130,.55);
-    color: #fff;
-}
-
-
-
-
-/* =========================================================
-   ACCOUNT / PROFILE — EXACT HOMEPAGE COMPONENT
-   ========================================================= */
-
-.account-menu {
-    position: relative;
-}
-
-.account-trigger {
-    appearance: none;
-    -webkit-appearance: none;
-    position: relative;
-    min-height: 46px;
-    padding: 5px 13px 5px 6px;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    border: 1px solid rgba(255, 255, 255, .16);
-    border-radius: 999px;
-    background: linear-gradient(135deg, rgba(255,255,255,.105), rgba(255,255,255,.035));
-    color: #fffaf3;
-    font-family: inherit;
-    cursor: pointer;
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
-    box-shadow:
-        0 8px 26px rgba(0,0,0,.16),
-        inset 0 1px 0 rgba(255,255,255,.12);
-    transition: background .25s ease, border-color .25s ease,
-                box-shadow .25s ease, transform .25s ease;
-}
-
-.account-trigger::before {
-    content: "";
-    position: absolute;
-    inset: 1px;
-    border-radius: inherit;
-    background: linear-gradient(120deg, rgba(255,255,255,.08), transparent 38%, transparent 72%, rgba(255,255,255,.025));
-    pointer-events: none;
-}
-
-.account-trigger:hover,
-.account-trigger[aria-expanded="true"] {
-    background: linear-gradient(135deg, rgba(255,255,255,.15), rgba(216,163,109,.07));
-    border-color: rgba(216,163,109,.42);
-    box-shadow:
-        0 12px 32px rgba(0,0,0,.21),
-        0 0 0 4px rgba(216,163,109,.045),
-        inset 0 1px 0 rgba(255,255,255,.16);
-    transform: translateY(-1px);
-}
-
-.profile-avatar,
-.dropdown-avatar {
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    border-radius: 50%;
-    color: #fffaf3;
-    background: linear-gradient(145deg, #c99968 0%, #9c623a 100%);
-    border: 1px solid rgba(255,255,255,.30);
-    box-shadow:
-        0 4px 12px rgba(0,0,0,.20),
-        inset 0 1px 0 rgba(255,255,255,.25);
-    font-family: "Playfair Display", Georgia, serif;
-    font-weight: 700;
-}
-
-.profile-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
-}
-
-.profile-name {
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: rgba(255,250,243,.94);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .025em;
-}
-
-.profile-chevron {
-    width: 20px;
-    height: 20px;
-    display: grid;
-    place-items: center;
-    color: rgba(255,250,243,.56);
-    font-size: 14px;
-    line-height: 1;
-    transition: transform .22s ease, color .22s ease;
-}
-
-.account-trigger[aria-expanded="true"] .profile-chevron {
-    color: #d8a36d;
-    transform: rotate(180deg);
-}
-
-.account-dropdown {
-    position: absolute;
-    top: calc(100% + 14px);
-    right: 0;
-    width: 305px;
-    padding: 10px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,.19);
-    border-radius: 20px;
-    background: linear-gradient(145deg, rgba(61,37,26,.82), rgba(29,18,13,.93));
-    backdrop-filter: blur(26px) saturate(145%);
-    -webkit-backdrop-filter: blur(26px) saturate(145%);
-    box-shadow:
-        0 26px 65px rgba(0,0,0,.34),
-        0 8px 25px rgba(0,0,0,.14),
-        inset 0 1px 0 rgba(255,255,255,.12);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-8px) scale(.975);
-    transform-origin: top right;
-    pointer-events: none;
-    transition: opacity .22s ease, visibility .22s ease,
-                transform .22s cubic-bezier(.2,.8,.2,1);
-}
-
-.account-dropdown::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-        radial-gradient(circle at 100% 0%, rgba(216,163,109,.11), transparent 34%),
-        linear-gradient(135deg, rgba(255,255,255,.035), transparent 40%);
-    pointer-events: none;
-}
-
-.account-dropdown::before {
-    content: "";
-    position: absolute;
-    top: -7px;
-    right: 28px;
-    width: 14px;
-    height: 14px;
-    border-left: 1px solid rgba(255,255,255,.18);
-    border-top: 1px solid rgba(255,255,255,.18);
-    background: rgba(55,33,23,.92);
-    transform: rotate(45deg);
-}
-
-.account-menu.open .account-dropdown {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0) scale(1);
-    pointer-events: auto;
-}
-
-.dropdown-profile {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 10px 14px;
-}
-
-.dropdown-avatar {
-    width: 44px;
-    height: 44px;
-    font-size: 17px;
-}
-
-.dropdown-profile div {
-    min-width: 0;
-}
-
-.dropdown-profile strong {
-    display: block;
-    color: #fffaf3;
-    font-size: 13px;
-    line-height: 1.3;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.dropdown-profile small {
-    display: block;
-    margin-top: 4px;
-    color: rgba(255,250,243,.52);
-    font-size: 10px;
-    line-height: 1.4;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.dropdown-divider {
-    position: relative;
-    z-index: 1;
-    height: 1px;
-    margin: 3px 5px 7px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
-}
-
-.dropdown-item {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 10px;
-    margin: 2px 0;
-    border: 1px solid transparent;
-    border-radius: 13px;
-    color: #fffaf3;
-    text-decoration: none;
-    transition: background .18s ease, border-color .18s ease, transform .18s ease;
-}
-
-.dropdown-item:hover {
-    background: rgba(255,255,255,.075);
-    border-color: rgba(255,255,255,.06);
-    transform: translateX(2px);
-}
-
-.dropdown-icon {
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    border: 1px solid rgba(216,163,109,.20);
-    border-radius: 10px;
-    background: rgba(216,163,109,.085);
-    color: #e0b17d;
-    font-size: 14px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
-}
-
-.dropdown-item strong {
-    display: block;
-    color: rgba(255,250,243,.94);
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.dropdown-item small {
-    display: block;
-    margin-top: 3px;
-    color: rgba(255,250,243,.45);
-    font-size: 9px;
-    line-height: 1.4;
-}
-
-.dropdown-logout {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px;
-    border-radius: 11px;
-    color: rgba(255,225,217,.80);
-    text-decoration: none;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    transition: background .18s ease, color .18s ease;
-}
-
-.dropdown-logout:hover {
-    background: rgba(169,71,55,.13);
-    color: #ffd8cf;
-}
-
-.nav-login {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    padding: 0 20px;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 999px;
-    background: linear-gradient(135deg, rgba(185,130,82,.96), rgba(145,88,51,.96));
-    color: #fffaf3;
-    text-decoration: none;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .14em;
-    box-shadow:
-        0 8px 22px rgba(0,0,0,.15),
-        inset 0 1px 0 rgba(255,255,255,.18);
-    transition: all .22s ease;
-}
-
-.nav-login:hover {
-    transform: translateY(-1px);
-    box-shadow:
-        0 11px 27px rgba(0,0,0,.20),
-        inset 0 1px 0 rgba(255,255,255,.20);
-}
-
-
-/* Keep the profile button from being affected by generic nav link rules. */
-.nav-actions .account-trigger,
-.nav-actions .profile-login {
-    text-transform: none;
-}
-
-
-
 
 /* =========================================================
    PAGE HEADER
@@ -725,6 +429,32 @@ body {
     transform: translateY(-2px);
     background: #42251a !important;
     box-shadow: 0 13px 28px rgba(47,27,19,.18);
+}
+
+
+/* =========================================================
+   FORM STATUS
+========================================================= */
+
+.form-status {
+    margin: 0 0 22px;
+    padding: 13px 15px;
+    border-radius: 11px;
+    font-size: .78rem;
+    line-height: 1.55;
+    font-weight: 700;
+}
+
+.form-status.success {
+    border: 1px solid rgba(72, 122, 79, .18);
+    background: rgba(231, 243, 231, .85);
+    color: #3f6844;
+}
+
+.form-status.error {
+    border: 1px solid rgba(158, 67, 52, .16);
+    background: rgba(249, 232, 227, .90);
+    color: #8b4335;
 }
 
 /* =========================================================
@@ -1058,127 +788,10 @@ body {
 
 <body>
 
-
-<!-- ==========================================
-     NAVBAR
-========================================== -->
-
-<header class="navbar">
-    <div class="nav-container">
-
-        <a href="index.php" class="logo" aria-label="Cafelia Home">
-            <span class="logo-text">CAFELIA</span>
-        </a>
-
-        <nav class="nav-menu">
-            <a href="index.php" >HOME</a>
-            <a href="menu.php">MENU</a>
-            <a href="about.php">ABOUT US</a>
-            <a href="join_team.php">JOIN OUR TEAM</a>
-            <a href="contact.php" class="active">CONTACT</a>
-        </nav>
-
-        <div class="nav-actions">
-
-            <!-- Glassmorphism Account Menu -->
-            <div class="account-menu">
-
-                <?php if (isset($_SESSION["user_id"])): ?>
-
-                    <button type="button"
-                            class="account-trigger"
-                            aria-label="Open account menu"
-                            aria-expanded="false"
-                            aria-haspopup="true"
-                            onclick="toggleAccountMenu(this)">
-                        <span class="profile-avatar" aria-hidden="true">
-                            <?php
-                                $nav_name = trim($_SESSION["user_name"] ?? "User");
-                                echo htmlspecialchars(strtoupper(substr($nav_name, 0, 1)));
-                            ?>
-                        </span>
-
-                        <span class="profile-name">
-                            <?php echo htmlspecialchars($_SESSION["user_name"] ?? "Profile"); ?>
-                        </span>
-                    </button>
-
-                    <div class="account-dropdown">
-
-                        <div class="dropdown-profile">
-                            <span class="dropdown-avatar">
-                                <?php
-                                    echo htmlspecialchars(strtoupper(substr($nav_name, 0, 1)));
-                                ?>
-                            </span>
-
-                            <div>
-                                <strong><?php echo htmlspecialchars($nav_name); ?></strong>
-                                <small>
-                                    <?php echo htmlspecialchars($_SESSION["user_email"] ?? "Cafelia Member"); ?>
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="dropdown-divider"></div>
-
-                        <a href="cart.php" class="dropdown-item">
-                            <span class="dropdown-icon">🛒</span>
-                            <span>
-                                <strong>Cart</strong>
-                                <small>View your selected items</small>
-                            </span>
-                        </a>
-
-                        <a href="join_team.php" class="dropdown-item">
-                            <span class="dropdown-icon">✦</span>
-                            <span>
-                                <strong>Join Our Team</strong>
-                                <small>Explore opportunities at Cafelia</small>
-                            </span>
-                        </a>
-
-                        <a href="profile.php" class="dropdown-item">
-                            <span class="dropdown-icon">♙</span>
-                            <span>
-                                <strong>Profile</strong>
-                                <small>Manage your Cafelia account</small>
-                            </span>
-                        </a>
-
-                        <div class="dropdown-divider"></div>
-
-                        <?php if (($_SESSION["user_role"] ?? "") === "admin"): ?>
-                            <a href="admin/dashboard.php" class="dropdown-item">
-                                <span class="dropdown-icon">⌘</span>
-                                <span>
-                                    <strong>Admin Dashboard</strong>
-                                    <small>Manage Cafelia</small>
-                                </span>
-                            </a>
-                            <div class="dropdown-divider"></div>
-                        <?php endif; ?>
-
-                        <a href="logout.php" class="dropdown-logout">
-                            <span>↪</span>
-                            Log Out
-                        </a>
-
-                    </div>
-
-                <?php else: ?>
-
-                    <a href="login.php" class="nav-login">
-                        LOGIN
-                    </a>
-
-                <?php endif; ?>
-
-            </div>
-
-        </div>
-    </div>
-</header>
+<?php
+$active_page = "contact";
+include "navbar.php";
+?>
 
 
 <!-- ==========================================
@@ -1347,9 +960,21 @@ body {
             Send Us a Message
         </h2>
 
+        <?php if ($success !== ""): ?>
+            <div class="form-status success" role="status">
+                <?php echo e($success); ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($error !== ""): ?>
+            <div class="form-status error" role="alert">
+                <?php echo e($error); ?>
+            </div>
+        <?php endif; ?>
+
 
         <form
-            action="#"
+            action="contact.php"
             method="POST"
             class="contact-form"
         >
@@ -1367,7 +992,9 @@ body {
                     type="text"
                     id="name"
                     name="name"
+                    value="<?php echo e($form["name"]); ?>"
                     placeholder="Enter your name"
+                    maxlength="100"
                     required
                 >
 
@@ -1386,7 +1013,9 @@ body {
                     type="email"
                     id="email"
                     name="email"
+                    value="<?php echo e($form["email"]); ?>"
                     placeholder="Enter your email"
+                    maxlength="150"
                     required
                 >
 
@@ -1405,7 +1034,9 @@ body {
                     type="text"
                     id="subject"
                     name="subject"
+                    value="<?php echo e($form["subject"]); ?>"
                     placeholder="What is your message about?"
+                    maxlength="200"
                     required
                 >
 
@@ -1426,7 +1057,7 @@ body {
                     rows="6"
                     placeholder="Write your message here..."
                     required
-                ></textarea>
+                ><?php echo e($form["message"]); ?></textarea>
 
             </div>
 
@@ -1652,51 +1283,7 @@ body {
 
 
 
-<script>
-function toggleAccountMenu(button) {
-    const menu = button.closest(".account-menu");
 
-    document.querySelectorAll(".account-menu.open").forEach(function (item) {
-        if (item !== menu) {
-            item.classList.remove("open");
-
-            const trigger = item.querySelector(".account-trigger");
-            if (trigger) {
-                trigger.setAttribute("aria-expanded", "false");
-            }
-        }
-    });
-
-    const isOpen = menu.classList.toggle("open");
-    button.setAttribute("aria-expanded", isOpen ? "true" : "false");
-}
-
-document.addEventListener("click", function (event) {
-    document.querySelectorAll(".account-menu.open").forEach(function (menu) {
-        if (!menu.contains(event.target)) {
-            menu.classList.remove("open");
-
-            const trigger = menu.querySelector(".account-trigger");
-            if (trigger) {
-                trigger.setAttribute("aria-expanded", "false");
-            }
-        }
-    });
-});
-
-document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape") {
-        document.querySelectorAll(".account-menu.open").forEach(function (menu) {
-            menu.classList.remove("open");
-
-            const trigger = menu.querySelector(".account-trigger");
-            if (trigger) {
-                trigger.setAttribute("aria-expanded", "false");
-            }
-        });
-    }
-});
-</script>
 
 <script src="js/script.js"></script>
 

@@ -67,9 +67,6 @@ while ($row = mysqli_fetch_assoc($result)) {
     <style>
 
 /* =========================================================
-   SHARED CAFELIA GLASSMORPHISM ACCOUNT NAVIGATION
-   ========================================================= */
-/* =========================================================
    CAFELIA — PREMIUM GLASSMORPHISM ACCOUNT NAVIGATION
    ========================================================= */
 
@@ -520,142 +517,10 @@ while ($row = mysqli_fetch_assoc($result)) {
 
 <body>
 
-
-<!-- =========================================================
-     NAVBAR
-========================================================= -->
-
-<header class="navbar">
-
-    <div class="nav-container">
-
-        <a href="index.php" class="logo" aria-label="Cafelia Home">
-            <span class="logo-text">CAFELIA</span>
-        </a>
-
-        <nav class="nav-menu">
-            <a href="index.php" class="active">HOME</a>
-            <a href="menu.php">MENU</a>
-            <a href="about.php">ABOUT US</a>
-            <a href="join_team.php">JOIN OUR TEAM</a>
-            <a href="contact.php">CONTACT</a>
-        </nav>
-
-        <div class="nav-actions">
-
-            <a href="cart.php" class="nav-cart" aria-label="Open shopping cart">
-                <span class="cart-icon">🛒</span>
-                <span>CART</span>
-            </a>
-
-            <div class="account-menu">
-
-                <?php if ($is_admin || $is_customer): ?>
-
-                    <button type="button"
-                            class="account-trigger"
-                            aria-expanded="false"
-                            aria-haspopup="true"
-                            onclick="toggleAccountMenu(this)">
-                        <span class="profile-avatar">
-                            <?php
-                                $nav_name = trim($account_name ?: "User");
-                                echo htmlspecialchars(strtoupper(substr($nav_name, 0, 1)));
-                            ?>
-                        </span>
-
-                        <span class="profile-name">
-                            <?php echo htmlspecialchars($nav_name); ?>
-                        </span>
-                    </button>
-
-                    <div class="account-dropdown">
-
-                        <div class="dropdown-profile">
-                            <span class="dropdown-avatar">
-                                <?php echo htmlspecialchars(strtoupper(substr($nav_name, 0, 1))); ?>
-                            </span>
-
-                            <div>
-                                <strong><?php echo htmlspecialchars($nav_name); ?></strong>
-                                <small>
-                                    <?php
-                                        echo htmlspecialchars(
-                                            $is_admin
-                                                ? ($_SESSION["admin_email"] ?? "Administrator")
-                                                : ($_SESSION["user_email"] ?? "Cafelia Member")
-                                        );
-                                    ?>
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="dropdown-divider"></div>
-
-                        <a href="cart.php" class="dropdown-item">
-                            <span class="dropdown-icon">🛒</span>
-                            <span>
-                                <strong>Cart</strong>
-                                <small>View your selected items</small>
-                            </span>
-                        </a>
-
-                        <a href="join_team.php" class="dropdown-item">
-                            <span class="dropdown-icon">✦</span>
-                            <span>
-                                <strong>Join Our Team</strong>
-                                <small>Explore opportunities at Cafelia</small>
-                            </span>
-                        </a>
-
-                        <?php if ($is_customer): ?>
-                            <a href="profile.php" class="dropdown-item">
-                                <span class="dropdown-icon">♙</span>
-                                <span>
-                                    <strong>Profile</strong>
-                                    <small>Manage your Cafelia account</small>
-                                </span>
-                            </a>
-                        <?php endif; ?>
-
-                        <?php if ($is_admin): ?>
-                            <div class="dropdown-divider"></div>
-                            <a href="admin/dashboard.php" class="dropdown-item">
-                                <span class="dropdown-icon">⌘</span>
-                                <span>
-                                    <strong>Admin Dashboard</strong>
-                                    <small>Manage Cafelia</small>
-                                </span>
-                            </a>
-                        <?php endif; ?>
-
-                        <div class="dropdown-divider"></div>
-
-                        <a href="logout.php" class="dropdown-logout">
-                            <span>↪</span>
-                            Log Out
-                        </a>
-
-                    </div>
-
-                <?php else: ?>
-
-                    <a href="login.php"
-                       class="account-trigger account-login-icon"
-                       aria-label="Login to Cafelia">
-                        <span class="profile-avatar profile-avatar-guest">♙</span>
-                    </a>
-
-                <?php endif; ?>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</header>
-
+<?php
+$active_page = "index";
+include "navbar.php";
+?>
 
 <!-- =========================================================
      HERO SECTION
@@ -1362,15 +1227,7 @@ while ($row = mysqli_fetch_assoc($result)) {
 
         <div class="footer-brand">
 
-            <a
-                href="index.php"
-                class="footer-logo"
-                aria-label="Cafelia Home"
-            >
-                <span class="footer-logo-text">
-                    CAFELIA
-                </span>
-            </a>
+            <a href="index.php" class="logo"><img src="image/logo.png" alt="Cafelia"></a>
 
 
             <p>
@@ -1471,7 +1328,7 @@ while ($row = mysqli_fetch_assoc($result)) {
                 <a href="logout.php">
                     LOGOUT
                 </a>
-
+n
 
             <?php elseif ($is_admin): ?>
 

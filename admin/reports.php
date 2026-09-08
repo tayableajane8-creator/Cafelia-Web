@@ -261,192 +261,13 @@ $recent_sales = $conn->query("
         }
 
 
-        /* =========================
-           SIDEBAR
-        ========================= */
-
-        .sidebar {
-            position: fixed;
-            inset: 0 auto 0 0;
-
-            width: 245px;
-
-            padding: 28px 17px;
-
-            background:
-                linear-gradient(
-                    180deg,
-                    var(--espresso-dark),
-                    var(--espresso)
-                );
-
-            color: white;
-
-            z-index: 100;
-        }
-
-
-        .brand {
-            padding: 7px 14px 27px;
-
-            border-bottom:
-                1px solid
-                rgba(255,255,255,.09);
-        }
-
-
-        .brand h2 {
-            font-family:
-                "Playfair Display",
-                Georgia,
-                serif;
-
-            font-size: 29px;
-            font-weight: 700;
-        }
-
-
-        .brand p {
-            margin-top: 4px;
-
-            color:
-                rgba(255,255,255,.43);
-
-            font-size: 10px;
-            font-weight: 700;
-
-            letter-spacing: .14em;
-            text-transform: uppercase;
-        }
-
-
-        .admin-label {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-
-            margin:
-                22px
-                10px
-                13px;
-
-            color:
-                rgba(255,255,255,.42);
-
-            font-size: 9px;
-            font-weight: 800;
-
-            letter-spacing: .14em;
-            text-transform: uppercase;
-        }
-
-
-        .admin-dot {
-            width: 7px;
-            height: 7px;
-
-            border-radius: 50%;
-
-            background: #94c59d;
-        }
-
-
-        .nav {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-
-        .nav a {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-
-            min-height: 47px;
-
-            padding: 0 13px;
-
-            border:
-                1px solid
-                transparent;
-
-            border-radius: 12px;
-
-            color:
-                rgba(255,255,255,.62);
-
-            font-size: 12px;
-            font-weight: 600;
-
-            transition:
-                background .2s ease,
-                color .2s ease,
-                transform .2s ease;
-        }
-
-
-        .nav a:hover {
-            background:
-                rgba(255,255,255,.07);
-
-            color: white;
-
-            transform: translateX(2px);
-        }
-
-
-        .nav a.active {
-            background:
-                rgba(255,255,255,.11);
-
-            border-color:
-                rgba(255,255,255,.06);
-
-            color: white;
-        }
-
-
-        .nav-icon {
-            width: 29px;
-            height: 29px;
-
-            display: grid;
-            place-items: center;
-
-            border-radius: 9px;
-
-            background:
-                rgba(255,255,255,.06);
-
-            font-size: 13px;
-        }
-
-
-        .nav a.active .nav-icon {
-            background: var(--caramel);
-        }
-
-
-        .nav-divider {
-            height: 1px;
-
-            margin:
-                10px
-                10px
-                12px;
-
-            background:
-                rgba(255,255,255,.08);
-        }
-
 
         /* =========================
            MAIN
         ========================= */
 
         .main {
-            margin-left: 245px;
+            margin-left: 260px;
 
             min-height: 100vh;
 
@@ -1162,29 +983,7 @@ $recent_sales = $conn->query("
 
 
         @media (max-width: 850px) {
-
-            .sidebar {
-                position: static;
-
-                width: 100%;
-                height: auto;
-            }
-
-
-            .nav {
-                display: grid;
-
-                grid-template-columns:
-                    repeat(3, 1fr);
-            }
-
-
-            .nav-divider {
-                display: none;
-            }
-
-
-            .main {
+.main {
                 margin-left: 0;
 
                 padding:
@@ -1211,14 +1010,7 @@ $recent_sales = $conn->query("
             .admin-user {
                 width: 100%;
             }
-
-
-            .nav {
-                grid-template-columns:
-                    repeat(2, 1fr);
-            }
-
-        }
+}
 
 
         @media (max-width: 430px) {
@@ -1256,126 +1048,10 @@ $recent_sales = $conn->query("
 
 <body>
 
-
-<!-- =========================
-     SIDEBAR
-========================= -->
-
-<aside class="sidebar">
-
-    <div class="brand">
-
-        <h2>
-            Cafelia
-        </h2>
-
-        <p>
-            Management System
-        </p>
-
-    </div>
-
-
-    <div class="admin-label">
-
-        <span class="admin-dot"></span>
-
-        Admin Panel
-
-    </div>
-
-
-    <nav class="nav">
-
-
-        <a href="dashboard.php">
-
-            <span class="nav-icon">
-                ⌂
-            </span>
-
-            Dashboard
-
-        </a>
-
-
-        <a href="products.php">
-
-            <span class="nav-icon">
-                ☕
-            </span>
-
-            Products
-
-        </a>
-
-
-        <a href="orders.php">
-
-            <span class="nav-icon">
-                ▤
-            </span>
-
-            Orders
-
-        </a>
-
-
-        <a href="customers.php">
-
-            <span class="nav-icon">
-                ♙
-            </span>
-
-            Customers
-
-        </a>
-
-
-        <a
-            href="reports.php"
-            class="active"
-        >
-
-            <span class="nav-icon">
-                ▥
-            </span>
-
-            Reports
-
-        </a>
-
-
-        <div class="nav-divider"></div>
-
-
-        <a href="../index.php">
-
-            <span class="nav-icon">
-                ↗
-            </span>
-
-            View Website
-
-        </a>
-
-
-        <a href="../index.php">
-
-            <span class="nav-icon">
-                ⇥
-            </span>
-
-            Logout
-
-        </a>
-
-
-    </nav>
-
-</aside>
-
-
+<?php
+$active_admin_page = "reports";
+include "sidebar.php";
+?>
 <!-- =========================
      MAIN
 ========================= -->

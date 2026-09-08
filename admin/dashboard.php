@@ -160,217 +160,13 @@ $recent_orders = $conn->query(
                 );
         }
 
-        /* =========================
-           SIDEBAR
-        ========================= */
-
-        .sidebar {
-            position: fixed;
-
-            top: 0;
-            left: 0;
-
-            width: 255px;
-            height: 100vh;
-
-            padding: 30px 18px;
-
-            display: flex;
-            flex-direction: column;
-
-            background:
-                linear-gradient(
-                    160deg,
-                    var(--espresso),
-                    #3b2418
-                );
-
-            color: white;
-
-            box-shadow:
-                8px 0 35px rgba(36, 21, 15, .10);
-
-            z-index: 100;
-        }
-
-        .sidebar-brand {
-            padding: 10px 14px 30px;
-        }
-
-        .sidebar-brand h1 {
-            font-family:
-                "Playfair Display",
-                Georgia,
-                serif;
-
-            font-size: 31px;
-            letter-spacing: .05em;
-        }
-
-        .sidebar-brand p {
-            margin-top: 6px;
-
-            color: rgba(255,255,255,.45);
-
-            font-size: 10px;
-            font-weight: 700;
-
-            letter-spacing: .16em;
-            text-transform: uppercase;
-        }
-
-        .admin-profile {
-            margin: 0 6px 28px;
-
-            padding: 14px;
-
-            display: flex;
-            align-items: center;
-
-            gap: 12px;
-
-            border:
-                1px solid rgba(255,255,255,.10);
-
-            border-radius: 16px;
-
-            background:
-                rgba(255,255,255,.06);
-
-            backdrop-filter: blur(12px);
-        }
-
-        .admin-avatar {
-            width: 40px;
-            height: 40px;
-
-            flex-shrink: 0;
-
-            display: grid;
-            place-items: center;
-
-            border-radius: 12px;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    var(--gold),
-                    var(--caramel)
-                );
-
-            color: white;
-
-            font-weight: 800;
-            font-size: 15px;
-        }
-
-        .admin-info {
-            min-width: 0;
-        }
-
-        .admin-info strong {
-            display: block;
-
-            overflow: hidden;
-
-            color: white;
-
-            font-size: 13px;
-
-            white-space: nowrap;
-            text-overflow: ellipsis;
-        }
-
-        .admin-info span {
-            display: block;
-
-            margin-top: 3px;
-
-            color: rgba(255,255,255,.42);
-
-            font-size: 10px;
-
-            text-transform: uppercase;
-            letter-spacing: .08em;
-        }
-
-        .sidebar-nav {
-            display: flex;
-            flex-direction: column;
-
-            gap: 6px;
-        }
-
-        .sidebar-nav a {
-            display: flex;
-            align-items: center;
-
-            gap: 13px;
-
-            padding: 13px 15px;
-
-            border-radius: 12px;
-
-            color: rgba(255,255,255,.62);
-
-            font-size: 13px;
-            font-weight: 600;
-
-            text-decoration: none;
-
-            transition: .2s ease;
-        }
-
-        .sidebar-nav a:hover {
-            color: white;
-
-            background:
-                rgba(255,255,255,.07);
-
-            transform: translateX(2px);
-        }
-
-        .sidebar-nav a.active {
-            color: white;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(185,130,82,.45),
-                    rgba(90,56,39,.65)
-                );
-
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,.10);
-        }
-
-        .nav-icon {
-            width: 25px;
-
-            text-align: center;
-
-            font-size: 16px;
-        }
-
-        .sidebar-bottom {
-            margin-top: auto;
-        }
-
-        .logout-link {
-            border-top:
-                1px solid rgba(255,255,255,.08);
-
-            margin-top: 12px;
-
-            padding-top: 18px !important;
-        }
 
         /* =========================
            MAIN
         ========================= */
 
         .main {
-            margin-left: 255px;
+            margin-left: 260px;
 
             min-height: 100vh;
 
@@ -735,6 +531,12 @@ $recent_orders = $conn->query(
            RESPONSIVE
         ========================= */
 
+        @media (max-width: 900px) {
+            .main {
+                margin-left: 0;
+            }
+        }
+
         @media (max-width: 1100px) {
 
             .stats {
@@ -744,53 +546,6 @@ $recent_orders = $conn->query(
 
         }
 
-        @media (max-width: 800px) {
-
-            .sidebar {
-                position: static;
-
-                width: 100%;
-                height: auto;
-
-                padding: 18px;
-            }
-
-            .sidebar-brand {
-                padding: 8px 8px 18px;
-            }
-
-            .admin-profile {
-                margin-bottom: 15px;
-            }
-
-            .sidebar-nav {
-                display: grid;
-
-                grid-template-columns:
-                    repeat(2, 1fr);
-            }
-
-            .sidebar-bottom {
-                margin-top: 8px;
-            }
-
-            .main {
-                margin-left: 0;
-
-                padding: 28px 20px;
-            }
-
-            .topbar {
-                align-items: flex-start;
-
-                gap: 15px;
-            }
-
-            .date-box {
-                display: none;
-            }
-
-        }
 
         @media (max-width: 560px) {
 
@@ -820,110 +575,10 @@ $recent_orders = $conn->query(
 
 <body>
 
-    <!-- SIDEBAR -->
-
-    <aside class="sidebar">
-
-        <div class="sidebar-brand">
-
-            <h1>Cafelia</h1>
-
-            <p>Admin Management</p>
-
-        </div>
-
-
-        <div class="admin-profile">
-
-            <div class="admin-avatar">
-
-                <?php
-                echo strtoupper(
-                    substr($admin_name, 0, 1)
-                );
-                ?>
-
-            </div>
-
-            <div class="admin-info">
-
-                <strong>
-                    <?php
-                    echo htmlspecialchars($admin_name);
-                    ?>
-                </strong>
-
-                <span>
-                    Administrator
-                </span>
-
-            </div>
-
-        </div>
-
-
-        <nav class="sidebar-nav">
-
-            <a
-                href="dashboard.php"
-                class="active"
-            >
-                <span class="nav-icon">⌂</span>
-                Dashboard
-            </a>
-
-            <a href="products.php">
-                <span class="nav-icon">☕</span>
-                Products
-            </a>
-
-            <a href="orders.php">
-                <span class="nav-icon">▣</span>
-                Orders
-            </a>
-
-            <a href="customers.php">
-                <span class="nav-icon">♙</span>
-                Customers
-            </a>
-
-            <a href="reports.php">
-                <span class="nav-icon">▤</span>
-                Reports
-            </a>
-
-        </nav>
-
-
-        <div class="sidebar-bottom">
-
-            <nav class="sidebar-nav">
-
-                <!-- IMPORTANT:
-                     This only opens the customer website.
-                     It does NOT destroy the admin session. -->
-
-                <a href="../index.php">
-                    <span class="nav-icon">↗</span>
-                    View Website
-                </a>
-
-
-                <!-- Actual logout -->
-
-                <a
-                    href="../logout.php"
-                    class="logout-link"
-                >
-                    <span class="nav-icon">⇥</span>
-                    Logout
-                </a>
-
-            </nav>
-
-        </div>
-
-    </aside>
+    <?php
+    $active_admin_page = "dashboard";
+    include "sidebar.php";
+    ?>
 
 
     <!-- MAIN CONTENT -->

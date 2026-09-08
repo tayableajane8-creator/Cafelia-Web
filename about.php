@@ -1120,195 +1120,38 @@ body {
 
 <style>
 /* =========================================================
-   CAFELIA SHARED NAVBAR
-   Matches the homepage / menu navigation
-========================================================= */
+   CAFELIA — PREMIUM GLASSMORPHISM ACCOUNT NAVIGATION
+   ========================================================= */
 
 .navbar {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 9999 !important;
-    width: 100%;
-    background: rgba(36, 21, 15, 0.97) !important;
-    border-bottom: 1px solid rgba(214, 173, 130, 0.18) !important;
-    box-shadow: 0 8px 30px rgba(20, 10, 5, 0.12) !important;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 
-.navbar .nav-container {
-    width: 100%;
-    max-width: 1380px;
-    min-height: 82px;
-    margin: 0 auto;
-    padding: 0 42px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.navbar .logo {
-    width: auto !important;
-    min-width: 145px;
-    margin: 0 !important;
-    display: inline-flex !important;
-    align-items: center;
-    text-decoration: none;
-}
-
-.navbar .logo-text {
-    display: inline-block;
-    font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-    font-size: 27px;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: 4px;
-    color: #f8f1e8 !important;
-    white-space: nowrap;
-    transition: color .25s ease, transform .25s ease;
-}
-
-.navbar .logo:hover .logo-text {
-    color: #d8b892 !important;
-    transform: translateY(-1px);
-}
-
-.navbar .nav-menu {
-    display: flex;
-    align-items: center;
-    gap: 34px;
-    margin-left: auto;
-    margin-right: 30px;
-}
-
-.navbar .nav-menu a {
+.nav-container {
     position: relative;
-    padding: 0 !important;
-    color: rgba(255,255,255,0.88) !important;
-    background: transparent !important;
-    border: 0 !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    letter-spacing: 1.25px;
-    line-height: 1;
-    text-decoration: none;
-    text-transform: uppercase;
-    transition: color .25s ease;
-}
-
-.navbar .nav-menu a:hover,
-.navbar .nav-menu a.active {
-    color: #d8b892 !important;
-}
-
-.navbar .nav-menu a.active::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -8px;
-    width: 100%;
-    height: 2px;
-    border-radius: 2px;
-    background: #d8b892;
-}
-
-.navbar .nav-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin: 0;
+    justify-content: flex-start;
+    width: 100%;
 }
 
-.navbar .nav-actions a {
-    min-height: 38px;
-    padding: 9px 15px !important;
-    display: inline-flex !important;
+.nav-menu {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    font-size: 10px !important;
-    font-weight: 700 !important;
-    letter-spacing: 1px;
-    text-decoration: none;
-    text-transform: uppercase;
-    transition: all .25s ease;
+    justify-content: flex-end;
+    margin-left: auto;
 }
 
-.navbar .nav-cart {
-    border: 1px solid rgba(214,173,130,0.55) !important;
-    color: #fff !important;
-    background: transparent !important;
-}
-
-.navbar .nav-login {
-    border: 1px solid #d6ad82 !important;
-    background: #d6ad82 !important;
-    color: #2a1811 !important;
-}
-
-.navbar .nav-cart:hover {
-    border-color: #d8b892 !important;
-    color: #d8b892 !important;
-    transform: translateY(-1px);
-}
-
-.navbar .nav-login:hover {
-    background: #e1bd91 !important;
-    border-color: #e1bd91 !important;
-    color: #2a1811 !important;
-    transform: translateY(-1px);
-}
-
-/* ---------- SHARED GLASS ACCOUNT / CART ---------- */
-
-.navbar .nav-right {
+.nav-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
-    margin-left: auto;
-}
-
-.navbar .nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0;
-}
-
-.navbar .nav-actions a.nav-cart {
-    min-height: 44px;
-    padding: 0 17px !important;
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    border: 1px solid rgba(255,255,255,.18) !important;
-    border-radius: 999px;
-    background: rgba(255,255,255,.055) !important;
-    color: rgba(255,250,243,.92) !important;
-    font-size: 10px !important;
-    font-weight: 800 !important;
-    letter-spacing: .14em;
-    box-shadow: 0 8px 22px rgba(0,0,0,.12),
-                inset 0 1px 0 rgba(255,255,255,.10);
-    backdrop-filter: blur(14px) saturate(135%);
-    -webkit-backdrop-filter: blur(14px) saturate(135%);
-    transition: all .22s ease;
-}
-
-.navbar .nav-actions a.nav-cart:hover {
-    border-color: rgba(216,163,109,.42) !important;
-    background: rgba(216,163,109,.10) !important;
-    color: #fffaf3 !important;
-    transform: translateY(-1px);
-}
-
-.cart-icon {
-    font-size: 14px;
-    line-height: 1;
-    filter: saturate(.75);
+    margin-left: 22px;
+    flex-shrink: 0;
 }
 
 .account-menu {
@@ -1316,31 +1159,46 @@ body {
 }
 
 .account-trigger {
+    appearance: none;
+    -webkit-appearance: none;
     position: relative;
-    min-height: 46px;
-    padding: 5px 15px 5px 6px;
+    min-height: 48px;
+    padding: 5px 12px 5px 6px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    border: 1px solid rgba(255,255,255,.16) !important;
+    border: 1px solid rgba(255, 255, 255, .16);
     border-radius: 999px;
-    background: linear-gradient(135deg,rgba(255,255,255,.105),rgba(255,255,255,.035)) !important;
-    color: #fffaf3 !important;
-    text-decoration: none !important;
+    background: linear-gradient(135deg, rgba(255,255,255,.105), rgba(255,255,255,.035));
+    color: #fffaf3;
+    font-family: inherit;
     cursor: pointer;
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
-    box-shadow: 0 8px 26px rgba(0,0,0,.16),
-                inset 0 1px 0 rgba(255,255,255,.12);
-    transition: .22s ease;
+    box-shadow:
+        0 8px 26px rgba(0,0,0,.16),
+        inset 0 1px 0 rgba(255,255,255,.12);
+    transition: background .25s ease, border-color .25s ease,
+                box-shadow .25s ease, transform .25s ease;
+}
+
+.account-trigger::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    background: linear-gradient(120deg, rgba(255,255,255,.08), transparent 38%, transparent 72%, rgba(255,255,255,.025));
+    pointer-events: none;
 }
 
 .account-trigger:hover,
 .account-trigger[aria-expanded="true"] {
-    border-color: rgba(216,163,109,.42) !important;
-    background: linear-gradient(135deg,rgba(255,255,255,.15),rgba(216,163,109,.07)) !important;
-    box-shadow: 0 12px 32px rgba(0,0,0,.21),
-                0 0 0 4px rgba(216,163,109,.045);
+    background: linear-gradient(135deg, rgba(255,255,255,.15), rgba(216,163,109,.07));
+    border-color: rgba(216,163,109,.42);
+    box-shadow:
+        0 12px 32px rgba(0,0,0,.21),
+        0 0 0 4px rgba(216,163,109,.045),
+        inset 0 1px 0 rgba(255,255,255,.16);
     transform: translateY(-1px);
 }
 
@@ -1351,11 +1209,12 @@ body {
     flex: 0 0 auto;
     border-radius: 50%;
     color: #fffaf3;
-    background: linear-gradient(145deg,#c99968,#9c623a);
+    background: linear-gradient(145deg, #c99968 0%, #9c623a 100%);
     border: 1px solid rgba(255,255,255,.30);
-    box-shadow: 0 4px 12px rgba(0,0,0,.20),
-                inset 0 1px 0 rgba(255,255,255,.25);
-    font-family: "Playfair Display",Georgia,serif;
+    box-shadow:
+        0 4px 12px rgba(0,0,0,.20),
+        inset 0 1px 0 rgba(255,255,255,.25);
+    font-family: "Playfair Display", Georgia, serif;
     font-weight: 700;
 }
 
@@ -1365,26 +1224,31 @@ body {
     font-size: 14px;
 }
 
-.account-login-trigger {
-    width: 46px;
-    padding: 5px !important;
-    justify-content: center;
-}
-
-.account-login-trigger .profile-avatar {
-    width: 36px;
-    height: 36px;
-}
-
 .profile-name {
-    max-width: 150px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: rgba(255,250,243,.94);
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: .02em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    letter-spacing: .025em;
+}
+
+.profile-chevron {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    color: rgba(255,250,243,.56);
+    font-size: 14px;
+    line-height: 1;
+    transition: transform .22s ease, color .22s ease;
+}
+
+.account-trigger[aria-expanded="true"] .profile-chevron {
+    color: #d8a36d;
+    transform: rotate(180deg);
 }
 
 .account-dropdown {
@@ -1396,17 +1260,43 @@ body {
     overflow: hidden;
     border: 1px solid rgba(255,255,255,.19);
     border-radius: 20px;
-    background: linear-gradient(145deg,rgba(61,37,26,.84),rgba(29,18,13,.94));
+    background: linear-gradient(145deg, rgba(61,37,26,.82), rgba(29,18,13,.93));
     backdrop-filter: blur(26px) saturate(145%);
     -webkit-backdrop-filter: blur(26px) saturate(145%);
-    box-shadow: 0 26px 65px rgba(0,0,0,.34),
-                inset 0 1px 0 rgba(255,255,255,.12);
+    box-shadow:
+        0 26px 65px rgba(0,0,0,.34),
+        0 8px 25px rgba(0,0,0,.14),
+        inset 0 1px 0 rgba(255,255,255,.12);
     opacity: 0;
     visibility: hidden;
     transform: translateY(-8px) scale(.975);
     transform-origin: top right;
     pointer-events: none;
-    transition: .2s ease;
+    transition: opacity .22s ease, visibility .22s ease,
+                transform .22s cubic-bezier(.2,.8,.2,1);
+}
+
+.account-dropdown::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(216,163,109,.11), transparent 34%),
+        linear-gradient(135deg, rgba(255,255,255,.035), transparent 40%);
+    pointer-events: none;
+}
+
+.account-dropdown::before {
+    content: "";
+    position: absolute;
+    top: -7px;
+    right: 28px;
+    width: 14px;
+    height: 14px;
+    border-left: 1px solid rgba(255,255,255,.18);
+    border-top: 1px solid rgba(255,255,255,.18);
+    background: rgba(55,33,23,.92);
+    transform: rotate(45deg);
 }
 
 .account-menu.open .account-dropdown {
@@ -1417,50 +1307,57 @@ body {
 }
 
 .dropdown-profile {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 10px 10px 14px;
-    color: #fffaf3;
-}
-
-.dropdown-profile > div {
-    min-width: 0;
-}
-
-.dropdown-profile strong,
-.dropdown-profile small,
-.dropdown-item strong,
-.dropdown-item small {
-    display: block;
-}
-
-.dropdown-profile strong {
-    font-size: 13px;
-}
-
-.dropdown-profile small {
-    margin-top: 3px;
-    color: rgba(255,250,243,.55);
-    font-size: 10px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .dropdown-avatar {
-    width: 42px;
-    height: 42px;
-    font-size: 16px;
+    width: 44px;
+    height: 44px;
+    font-size: 17px;
+}
+
+.dropdown-profile div {
+    min-width: 0;
+}
+
+.dropdown-profile strong {
+    display: block;
+    color: #fffaf3;
+    font-size: 13px;
+    line-height: 1.3;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dropdown-profile small {
+    display: block;
+    margin-top: 4px;
+    color: rgba(255,250,243,.52);
+    font-size: 10px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .dropdown-divider {
+    position: relative;
+    z-index: 1;
     height: 1px;
     margin: 3px 5px 7px;
-    background: linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
 }
 
 .dropdown-item {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 11px;
@@ -1468,14 +1365,15 @@ body {
     margin: 2px 0;
     border: 1px solid transparent;
     border-radius: 13px;
-    color: #fffaf3 !important;
-    text-decoration: none !important;
-    transition: .18s ease;
+    color: #fffaf3;
+    text-decoration: none;
+    transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
 
 .dropdown-item:hover {
-    background: rgba(255,255,255,.055);
-    border-color: rgba(255,255,255,.08);
+    background: rgba(255,255,255,.075);
+    border-color: rgba(255,255,255,.06);
+    transform: translateX(2px);
 }
 
 .dropdown-icon {
@@ -1488,493 +1386,193 @@ body {
     border-radius: 10px;
     background: rgba(216,163,109,.085);
     color: #e0b17d;
+    font-size: 14px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
 }
 
 .dropdown-item strong {
+    display: block;
+    color: rgba(255,250,243,.94);
     font-size: 11px;
+    font-weight: 700;
 }
 
 .dropdown-item small {
-    margin-top: 2px;
-    color: rgba(255,250,243,.48);
+    display: block;
+    margin-top: 3px;
+    color: rgba(255,250,243,.45);
     font-size: 9px;
+    line-height: 1.4;
 }
 
 .dropdown-logout {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 10px;
-    color: rgba(255,225,217,.80) !important;
-    text-decoration: none !important;
+    border-radius: 11px;
+    color: rgba(255,225,217,.80);
+    text-decoration: none;
     font-size: 10px;
     font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
+    transition: background .18s ease, color .18s ease;
 }
 
 .dropdown-logout:hover {
-    color: #fffaf3 !important;
+    background: rgba(169,71,55,.13);
+    color: #ffd8cf;
 }
 
-@media (max-width: 1050px) {
-    .navbar .nav-container {
-        padding: 0 25px;
-    }
-
-    .navbar .nav-menu {
-        gap: 20px;
-        margin-right: 18px;
-    }
+.nav-cart {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 44px;
+    padding: 0 17px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px;
+    background: rgba(255,255,255,.055);
+    color: rgba(255,250,243,.92);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    box-shadow:
+        0 8px 22px rgba(0,0,0,.12),
+        inset 0 1px 0 rgba(255,255,255,.10);
+    backdrop-filter: blur(14px) saturate(135%);
+    -webkit-backdrop-filter: blur(14px) saturate(135%);
+    transition: all .22s ease;
 }
 
-@media (max-width: 820px) {
-    .navbar {
-        position: relative !important;
-    }
-
-    .navbar .nav-container {
-        min-height: auto;
-        padding: 18px 5%;
-        flex-wrap: wrap;
-        gap: 15px;
-    }
-
-    .navbar .nav-menu {
-        order: 3;
-        width: 100%;
-        margin: 0;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 18px;
-    }
-
-    .navbar .nav-menu a {
-        padding: 8px 0 !important;
-    }
-
-    .navbar .nav-menu a.active::after {
-        bottom: 0;
-    }
-
-    .navbar .nav-actions {
-        margin-left: auto;
-    }
+.nav-cart:hover {
+    border-color: rgba(216,163,109,.42);
+    background: rgba(216,163,109,.10);
+    color: #fffaf3;
+    transform: translateY(-1px);
+    box-shadow:
+        0 11px 27px rgba(0,0,0,.18),
+        inset 0 1px 0 rgba(255,255,255,.14);
 }
 
-@media (max-width: 520px) {
-    .navbar .logo-text {
-        font-size: 22px;
-        letter-spacing: 3px;
-    }
-
-    .navbar .nav-menu {
-        gap: 13px;
-    }
-
-    .navbar .nav-menu a {
-        font-size: 9px !important;
-        letter-spacing: 1px;
-    }
-
-    .navbar .nav-actions a {
-        min-height: 34px;
-        padding: 8px 12px !important;
-        font-size: 9px !important;
-    }
-}
-</style>
-
-<style>
-@media (max-width: 820px) {
-    .navbar .nav-right {
-        margin-left: auto;
-    }
-
-    .navbar .nav-actions {
-        margin-left: 0;
-        width: auto;
-        justify-content: flex-end;
-    }
+.cart-icon {
+    font-size: 14px;
+    line-height: 1;
+    filter: saturate(.75);
 }
 
-@media (max-width: 600px) {
-    .navbar .nav-right {
-        width: auto;
-        margin-left: auto;
-        gap: 7px;
+.account-login-icon {
+    min-width: 48px;
+    padding: 5px 6px;
+    text-decoration: none;
+}
+
+.account-login-icon .profile-avatar-guest {
+    width: 36px;
+    height: 36px;
+    font-family: Arial, sans-serif;
+    font-size: 19px;
+    line-height: 1;
+}
+
+.account-login-icon:hover {
+    text-decoration: none;
+}
+
+.nav-login {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 20px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(185,130,82,.96), rgba(145,88,51,.96));
+    color: #fffaf3;
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    box-shadow:
+        0 8px 22px rgba(0,0,0,.15),
+        inset 0 1px 0 rgba(255,255,255,.18);
+    transition: all .22s ease;
+}
+
+.nav-login:hover {
+    transform: translateY(-1px);
+    box-shadow:
+        0 11px 27px rgba(0,0,0,.20),
+        inset 0 1px 0 rgba(255,255,255,.20);
+}
+
+@media (max-width: 900px) {
+    .nav-cart {
+        min-height: 42px;
+        padding: 0 12px;
+        font-size: 9px;
     }
 
-    .navbar .nav-actions {
-        width: auto;
-        margin: 0;
-    }
-
-    .navbar .nav-actions a.nav-cart {
-        min-height: 40px;
-        padding: 0 12px !important;
-        font-size: 9px !important;
-    }
 
     .account-trigger {
-        min-height: 42px;
-    }
-
-    .account-login-trigger {
-        width: 42px;
+        min-height: 43px;
+        padding-right: 8px;
     }
 
     .profile-name {
         display: none;
     }
 
+    .profile-chevron {
+        margin-left: 1px;
+    }
+
     .account-dropdown {
-        right: -4px;
-        width: min(305px, calc(100vw - 20px));
+        right: -5px;
+        width: min(305px, calc(100vw - 28px));
     }
 }
-</style>
 
-
-<style>
-/* =========================================================
-   ABOUT PAGE — MATCH MENU NAVBAR EXACTLY
-   ========================================================= */
-
-.navbar {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 9999 !important;
-    border-bottom: 1px solid rgba(255,255,255,.08) !important;
+@media (max-width: 700px) {
+    .account-dropdown {
+        top: calc(100% + 10px);
+    }
 }
 
-.navbar .nav-container {
-    position: relative !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    width: 100% !important;
+@media (max-width: 480px) {
+    .account-dropdown {
+        width: min(292px, calc(100vw - 24px));
+    }
 }
 
-.navbar .logo {
-    margin-right: auto !important;
-}
-
-.navbar .nav-menu {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    margin-left: auto !important;
-}
-
-.navbar .nav-menu a {
-    position: relative !important;
-    padding: 0 !important;
-    background: transparent !important;
-    border: 0 !important;
-    text-decoration: none !important;
-    text-transform: uppercase !important;
-}
-
-.navbar .nav-menu a.active::after {
-    bottom: -8px !important;
-    height: 2px !important;
-}
-
-.navbar .nav-actions {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 10px !important;
-    margin-left: 22px !important;
-    flex-shrink: 0 !important;
-}
-
-.navbar .nav-cart {
-    position: relative !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 7px !important;
-    min-height: 44px !important;
-    padding: 0 17px !important;
-    border: 1px solid rgba(255,255,255,.18) !important;
-    border-radius: 999px !important;
-    background: rgba(255,255,255,.055) !important;
-    color: rgba(255,250,243,.92) !important;
-    font-size: 10px !important;
-    font-weight: 800 !important;
-    letter-spacing: .14em !important;
-    box-shadow:
-        0 8px 22px rgba(0,0,0,.12),
-        inset 0 1px 0 rgba(255,255,255,.10) !important;
-    backdrop-filter: blur(14px) saturate(135%) !important;
-    -webkit-backdrop-filter: blur(14px) saturate(135%) !important;
-}
-
-.navbar .account-trigger {
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    position: relative !important;
-    min-height: 48px !important;
-    padding: 5px 12px 5px 6px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 10px !important;
-    border: 1px solid rgba(255,255,255,.16) !important;
-    border-radius: 999px !important;
-    background: linear-gradient(135deg,rgba(255,255,255,.105),rgba(255,255,255,.035)) !important;
-    color: #fffaf3 !important;
-    font-family: inherit !important;
-    cursor: pointer !important;
-    backdrop-filter: blur(20px) saturate(140%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
-    box-shadow:
-        0 8px 26px rgba(0,0,0,.16),
-        inset 0 1px 0 rgba(255,255,255,.12) !important;
-}
-
-.navbar .profile-avatar {
-    width: 36px !important;
-    height: 36px !important;
-    display: grid !important;
-    place-items: center !important;
-    flex: 0 0 auto !important;
-    border-radius: 50% !important;
-    color: #fffaf3 !important;
-    background: linear-gradient(145deg,#c99968 0%,#9c623a 100%) !important;
-    border: 1px solid rgba(255,255,255,.30) !important;
-    box-shadow:
-        0 4px 12px rgba(0,0,0,.20),
-        inset 0 1px 0 rgba(255,255,255,.25) !important;
-    font-family: "Playfair Display",Georgia,serif !important;
-    font-weight: 700 !important;
-    font-size: 14px !important;
-}
-
-.navbar .profile-name {
-    max-width: 140px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    color: rgba(255,250,243,.94) !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    letter-spacing: .025em !important;
-}
-
-.navbar .account-login-icon {
-    min-width: 48px !important;
-    padding: 5px 6px !important;
-    text-decoration: none !important;
-    justify-content: center !important;
-}
-
-.navbar .profile-avatar-guest {
-    width: 36px !important;
-    height: 36px !important;
-    font-family: Arial,sans-serif !important;
-    font-size: 19px !important;
-}
-
+/* Keep cart + account visible on the menu page. */
 @media (max-width: 1050px) {
-    .navbar .nav-actions {
+    .nav-actions {
         display: flex !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        gap: 10px !important;
-        margin-left: auto !important;
-        flex-shrink: 0 !important;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-left: auto;
+        flex-shrink: 0;
     }
 }
 
-@media (max-width: 900px) {
-    .navbar .nav-cart {
-        min-height: 42px !important;
-        padding: 0 12px !important;
-        font-size: 9px !important;
-    }
-
-    .navbar .account-trigger {
-        min-height: 43px !important;
-        padding-right: 8px !important;
-    }
-
-    .navbar .profile-name {
-        display: none !important;
-    }
-}
-
-@media (max-width: 820px) {
-    .navbar .nav-container {
-        flex-wrap: wrap !important;
-        gap: 15px !important;
-    }
-
-    .navbar .nav-menu {
-        order: 3 !important;
-        width: 100% !important;
-        margin: 0 !important;
-        justify-content: center !important;
-        flex-wrap: wrap !important;
-        gap: 18px !important;
-    }
-
-    .navbar .nav-menu a {
-        padding: 8px 0 !important;
-    }
-
-    .navbar .nav-menu a.active::after {
-        bottom: 0 !important;
-    }
-
-    .navbar .nav-actions {
-        margin-left: auto !important;
-    }
-}
-
-@media (max-width: 520px) {
-    .navbar .nav-menu {
-        gap: 13px !important;
-    }
-
-    .navbar .nav-menu a {
-        font-size: 9px !important;
-        letter-spacing: 1px !important;
-    }
-
-    .navbar .nav-actions a {
-        min-height: 34px !important;
-        padding: 8px 12px !important;
-        font-size: 9px !important;
-    }
-    /* Remove unwanted navbar decoration beside the logo */
-.navbar .logo::before,
-.navbar .logo::after {
-    content: none !important;
-    display: none !important;
-}
-}
 </style>
 
 </head>
 
 <body>
 
-
-<!-- =====================================================
-     NAVBAR
-===================================================== -->
-
-<header class="navbar">
-    <div class="nav-container">
-
-        <a href="index.php" class="logo" aria-label="Cafelia Home">
-            <span class="logo-text">CAFELIA</span>
-        </a>
-
-        <nav class="nav-menu">
-            <a href="index.php">HOME</a>
-            <a href="menu.php">MENU</a>
-            <a href="about.php" class="active">ABOUT US</a>
-            <a href="join_team.php">JOIN OUR TEAM</a>
-            <a href="contact.php">CONTACT</a>
-        </nav>
-
-        <div class="nav-actions">
-
-            <a href="cart.php" class="nav-cart" aria-label="Open shopping cart">
-                <span class="cart-icon">🛒</span>
-                <span>CART</span>
-            </a>
-
-            <div class="account-menu">
-
-                <?php if (isset($_SESSION["user_id"])): ?>
-
-                    <button type="button"
-                            class="account-trigger"
-                            aria-expanded="false"
-                            aria-haspopup="true"
-                            onclick="toggleAccountMenu(this)">
-                        <span class="profile-avatar">
-                            <?php
-                                $nav_name = trim($_SESSION["user_name"] ?? "User");
-                                echo htmlspecialchars(strtoupper(substr($nav_name, 0, 1)));
-                            ?>
-                        </span>
-
-                        <span class="profile-name">
-                            <?php echo htmlspecialchars($_SESSION["user_name"] ?? "Profile"); ?>
-                        </span>
-                    </button>
-
-                    <div class="account-dropdown">
-
-                        <div class="dropdown-profile">
-                            <span class="dropdown-avatar">
-                                <?php echo htmlspecialchars(strtoupper(substr($nav_name, 0, 1))); ?>
-                            </span>
-
-                            <div>
-                                <strong><?php echo htmlspecialchars($nav_name); ?></strong>
-                                <small>
-                                    <?php echo htmlspecialchars($_SESSION["user_email"] ?? "Cafelia Member"); ?>
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="dropdown-divider"></div>
-
-                        <a href="cart.php" class="dropdown-item">
-                            <span class="dropdown-icon">🛒</span>
-                            <span>
-                                <strong>Cart</strong>
-                                <small>View your selected items</small>
-                            </span>
-                        </a>
-
-                        <a href="join_team.php" class="dropdown-item">
-                            <span class="dropdown-icon">✦</span>
-                            <span>
-                                <strong>Join Our Team</strong>
-                                <small>Explore opportunities at Cafelia</small>
-                            </span>
-                        </a>
-
-                        <a href="profile.php" class="dropdown-item">
-                            <span class="dropdown-icon">♙</span>
-                            <span>
-                                <strong>Profile</strong>
-                                <small>Manage your Cafelia account</small>
-                            </span>
-                        </a>
-
-                        <div class="dropdown-divider"></div>
-
-                        <a href="logout.php" class="dropdown-logout">
-                            <span>↪</span>
-                            Log Out
-                        </a>
-
-                    </div>
-
-                <?php else: ?>
-
-                    <a href="login.php"
-                       class="account-trigger account-login-icon"
-                       aria-label="Log in to your Cafelia account">
-                        <span class="profile-avatar profile-avatar-guest">♙</span>
-                    </a>
-
-                <?php endif; ?>
-
-            </div>
-        </div>
-
-    </div>
-</header>
-
+<?php
+$active_page = "about";
+include "navbar.php";
+?>
 
 
 <!-- =====================================================

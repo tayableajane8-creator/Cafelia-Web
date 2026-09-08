@@ -1328,7 +1328,6 @@ include "navbar.php";
                 <a href="logout.php">
                     LOGOUT
                 </a>
-n
 
             <?php elseif ($is_admin): ?>
 

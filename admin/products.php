@@ -1,19 +1,35 @@
 <?php
 
 session_start();
+
 require_once "../config/database.php";
 
-/* ADMIN ACCESS */
+/* =========================================================
+   ADMIN ACCESS
+========================================================= */
+
 if (!isset($_SESSION["admin_id"])) {
     header("Location: ../login.php");
     exit();
 }
 
-/* SEARCH + FILTER */
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+$MAX_STOCK = 5;
+
+/* =========================================================
+   SEARCH + FILTER
+========================================================= */
+
 $search = trim($_GET["search"] ?? "");
 $category = trim($_GET["category"] ?? "");
 
-/* GET CATEGORIES */
+/* =========================================================
+   GET CATEGORIES
+========================================================= */
+
 $categories = [];
 
 $category_result = $conn->query(
@@ -30,7 +46,10 @@ if ($category_result) {
     }
 }
 
-/* GET PRODUCTS */
+/* =========================================================
+   GET PRODUCTS
+========================================================= */
+
 $sql = "
     SELECT
         id,
@@ -40,7 +59,8 @@ $sql = "
         price,
         stock,
         status,
-        image
+        image,
+        created_at
     FROM products
     WHERE 1=1
 ";
@@ -49,6 +69,7 @@ $params = [];
 $types = "";
 
 if ($search !== "") {
+
     $sql .= "
         AND (
             name LIKE ?
@@ -67,7 +88,9 @@ if ($search !== "") {
 }
 
 if ($category !== "") {
+
     $sql .= " AND category = ?";
+
     $params[] = $category;
     $types .= "s";
 }
@@ -75,6 +98,10 @@ if ($category !== "") {
 $sql .= " ORDER BY id DESC";
 
 $stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    die("Database error: " . $conn->error);
+}
 
 if ($types !== "") {
     $stmt->bind_param($types, ...$params);
@@ -84,7 +111,15 @@ $stmt->execute();
 
 $products = $stmt->get_result();
 
-/* COUNTS */
+/* =========================================================
+   COUNTS
+
+   IMPORTANT:
+   Stock 5 = FULL STOCK
+   Stock 1-4 = LOW STOCK
+   Stock 0 = OUT OF STOCK
+========================================================= */
+
 $total_products = 0;
 $active_products = 0;
 $low_stock = 0;
@@ -93,19 +128,36 @@ $out_of_stock = 0;
 $count_result = $conn->query(
     "SELECT
         COUNT(*) AS total,
-        SUM(LOWER(status) IN ('active', 'available')) AS active,
-        SUM(stock > 0 AND stock <= 5) AS low_stock,
+        SUM(
+            LOWER(status) IN ('active', 'available')
+            AND stock > 0
+        ) AS active,
+        SUM(stock >= 1 AND stock <= 4) AS low_stock,
         SUM(stock <= 0) AS out_stock
      FROM products"
 );
 
 if ($count_result) {
+
     $counts = $count_result->fetch_assoc();
 
-    $total_products = (int)$counts["total"];
-    $active_products = (int)$counts["active"];
-    $low_stock = (int)$counts["low_stock"];
-    $out_of_stock = (int)$counts["out_stock"];
+    $total_products = (int)($counts["total"] ?? 0);
+    $active_products = (int)($counts["active"] ?? 0);
+    $low_stock = (int)($counts["low_stock"] ?? 0);
+    $out_of_stock = (int)($counts["out_stock"] ?? 0);
+}
+
+/* =========================================================
+   ESCAPE FUNCTION
+========================================================= */
+
+function e($value)
+{
+    return htmlspecialchars(
+        (string)($value ?? ""),
+        ENT_QUOTES,
+        "UTF-8"
+    );
 }
 
 ?>
@@ -200,10 +252,215 @@ if ($count_result) {
                 );
         }
 
-        /* MAIN */
+        /* =====================================================
+           SIDEBAR
+        ===================================================== */
+
+        .sidebar {
+            position: fixed;
+
+            top: 0;
+            left: 0;
+
+            width: 255px;
+            height: 100vh;
+
+            padding: 30px 18px;
+
+            display: flex;
+            flex-direction: column;
+
+            background:
+                linear-gradient(
+                    160deg,
+                    var(--espresso),
+                    #3b2418
+                );
+
+            color: white;
+
+            box-shadow:
+                8px 0 35px rgba(36,21,15,.10);
+
+            z-index: 10;
+        }
+
+        .brand {
+            padding: 10px 14px 30px;
+        }
+
+        .brand h1 {
+            font-family:
+                "Playfair Display",
+                Georgia,
+                serif;
+
+            font-size: 31px;
+            letter-spacing: .05em;
+        }
+
+        .brand p {
+            margin-top: 6px;
+
+            color: rgba(255,255,255,.43);
+
+            font-size: 10px;
+            font-weight: 700;
+
+            letter-spacing: .15em;
+            text-transform: uppercase;
+        }
+
+        .admin-box {
+            margin: 0 6px 25px;
+
+            padding: 13px;
+
+            display: flex;
+            align-items: center;
+
+            gap: 11px;
+
+            border:
+                1px solid rgba(255,255,255,.09);
+
+            border-radius: 15px;
+
+            background:
+                rgba(255,255,255,.06);
+
+            backdrop-filter: blur(12px);
+        }
+
+        .admin-avatar {
+            width: 40px;
+            height: 40px;
+
+            display: grid;
+            place-items: center;
+
+            flex-shrink: 0;
+
+            border-radius: 12px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--gold),
+                    var(--caramel)
+                );
+
+            font-weight: 800;
+        }
+
+        .admin-info {
+            min-width: 0;
+        }
+
+        .admin-info strong {
+            display: block;
+
+            overflow: hidden;
+
+            color: white;
+
+            font-size: 12px;
+
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .admin-info span {
+            display: block;
+
+            margin-top: 3px;
+
+            color: rgba(255,255,255,.40);
+
+            font-size: 9px;
+            font-weight: 700;
+
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .nav {
+            display: flex;
+            flex-direction: column;
+
+            gap: 5px;
+        }
+
+        .nav a {
+            display: flex;
+            align-items: center;
+
+            gap: 12px;
+
+            padding: 13px 15px;
+
+            border-radius: 12px;
+
+            color: rgba(255,255,255,.60);
+
+            font-size: 13px;
+            font-weight: 600;
+
+            text-decoration: none;
+
+            transition: .2s ease;
+        }
+
+        .nav a:hover {
+            color: white;
+
+            background:
+                rgba(255,255,255,.07);
+
+            transform: translateX(2px);
+        }
+
+        .nav a.active {
+            color: white;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(185,130,82,.46),
+                    rgba(90,56,39,.62)
+                );
+
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,.10);
+        }
+
+        .nav-icon {
+            width: 23px;
+
+            text-align: center;
+
+            font-size: 15px;
+        }
+
+        .sidebar-bottom {
+            margin-top: auto;
+        }
+
+        .logout {
+            margin-top: 12px;
+
+            padding-top: 18px !important;
+
+            border-top:
+                1px solid rgba(255,255,255,.08);
+        }
+
+        /* =====================================================
+           MAIN
+        ===================================================== */
 
         .main {
-            margin-left: 260px;
+            margin-left: var(--admin-sidebar-width, 260px);
 
             min-height: 100vh;
 
@@ -229,7 +486,6 @@ if ($count_result) {
             font-weight: 800;
 
             letter-spacing: .18em;
-
             text-transform: uppercase;
         }
 
@@ -242,7 +498,6 @@ if ($count_result) {
             color: var(--espresso);
 
             font-size: 38px;
-
             font-weight: 600;
         }
 
@@ -288,7 +543,47 @@ if ($count_result) {
             transform: translateY(-2px);
         }
 
-        /* MINI STATS */
+        /* =====================================================
+           MESSAGE
+        ===================================================== */
+
+        .product-message {
+            margin: -10px 0 22px;
+
+            padding: 13px 16px;
+
+            border:
+                1px solid rgba(80,50,34,.10);
+
+            border-radius: 12px;
+
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .product-message.success {
+            background:
+                rgba(57,113,73,.08);
+
+            border-color:
+                rgba(57,113,73,.18);
+
+            color: var(--green);
+        }
+
+        .product-message.error {
+            background:
+                rgba(155,75,64,.08);
+
+            border-color:
+                rgba(155,75,64,.18);
+
+            color: var(--red);
+        }
+
+        /* =====================================================
+           MINI STATS
+        ===================================================== */
 
         .mini-stats {
             display: grid;
@@ -365,11 +660,12 @@ if ($count_result) {
             font-weight: 800;
 
             letter-spacing: .08em;
-
             text-transform: uppercase;
         }
 
-        /* PRODUCT PANEL */
+        /* =====================================================
+           PANEL
+        ===================================================== */
 
         .panel {
             overflow: hidden;
@@ -409,7 +705,6 @@ if ($count_result) {
                 serif;
 
             font-size: 22px;
-
             font-weight: 600;
         }
 
@@ -421,7 +716,9 @@ if ($count_result) {
             font-size: 11px;
         }
 
-        /* FILTERS */
+        /* =====================================================
+           FILTERS
+        ===================================================== */
 
         .filters {
             display: flex;
@@ -455,7 +752,6 @@ if ($count_result) {
             color: var(--text);
 
             font-family: inherit;
-
             font-size: 11px;
         }
 
@@ -497,7 +793,6 @@ if ($count_result) {
             color: var(--text);
 
             font-family: inherit;
-
             font-size: 11px;
 
             cursor: pointer;
@@ -546,7 +841,9 @@ if ($count_result) {
             text-decoration: none;
         }
 
-        /* TABLE */
+        /* =====================================================
+           TABLE
+        ===================================================== */
 
         .table-wrap {
             width: 100%;
@@ -557,7 +854,7 @@ if ($count_result) {
         table {
             width: 100%;
 
-            min-width: 950px;
+            min-width: 1050px;
 
             border-collapse: collapse;
         }
@@ -602,6 +899,10 @@ if ($count_result) {
                 rgba(185,130,82,.035);
         }
 
+        /* =====================================================
+           PRODUCT IMAGE
+        ===================================================== */
+
         .product-image {
             width: 62px;
             height: 62px;
@@ -639,6 +940,10 @@ if ($count_result) {
             font-size: 21px;
         }
 
+        /* =====================================================
+           PRODUCT
+        ===================================================== */
+
         .product-name {
             min-width: 190px;
         }
@@ -667,6 +972,7 @@ if ($count_result) {
             line-height: 1.45;
 
             white-space: nowrap;
+
             text-overflow: ellipsis;
         }
 
@@ -696,6 +1002,37 @@ if ($count_result) {
             white-space: nowrap;
         }
 
+        /* =====================================================
+           DATE ADDED
+        ===================================================== */
+
+        .date-added {
+            white-space: nowrap;
+        }
+
+        .date-added strong,
+        .date-added small {
+            display: block;
+        }
+
+        .date-added strong {
+            color: var(--text);
+
+            font-size: 11px;
+        }
+
+        .date-added small {
+            margin-top: 3px;
+
+            color: var(--muted);
+
+            font-size: 9px;
+        }
+
+        /* =====================================================
+           STOCK
+        ===================================================== */
+
         .stock {
             font-weight: 800;
 
@@ -720,9 +1057,12 @@ if ($count_result) {
             margin-top: 3px;
 
             font-size: 9px;
-
             font-weight: 600;
         }
+
+        /* =====================================================
+           STATUS
+        ===================================================== */
 
         .status {
             display: inline-flex;
@@ -741,21 +1081,32 @@ if ($count_result) {
         }
 
         .status.active {
-            background: var(--green-bg);
+            background:
+                var(--green-bg);
 
-            color: var(--green);
+            color:
+                var(--green);
         }
 
         .status.inactive {
-            background: var(--red-bg);
+            background:
+                var(--red-bg);
 
-            color: var(--red);
+            color:
+                var(--red);
         }
+
+        /* =====================================================
+           ACTIONS
+        ===================================================== */
 
         .actions {
             display: flex;
+            align-items: center;
 
             gap: 7px;
+
+            white-space: nowrap;
         }
 
         .action {
@@ -771,23 +1122,42 @@ if ($count_result) {
             transition: .2s ease;
         }
 
+        .action:hover {
+            transform: translateY(-1px);
+        }
+
         .edit {
             background:
                 rgba(185,130,82,.11);
 
-            color: var(--coffee);
+            color:
+                var(--coffee);
+        }
+
+        .stock-add {
+            background:
+                var(--green-bg);
+
+            color:
+                var(--green);
+        }
+
+        .stock-add:hover {
+            background:
+                #dff0e3;
         }
 
         .delete {
             background:
                 var(--red-bg);
 
-            color: var(--red);
+            color:
+                var(--red);
         }
 
-        .action:hover {
-            transform: translateY(-1px);
-        }
+        /* =====================================================
+           EMPTY
+        ===================================================== */
 
         .empty {
             padding: 65px 20px !important;
@@ -824,31 +1194,73 @@ if ($count_result) {
             font-size: 11px;
         }
 
-        /* MOBILE */
+        /* =====================================================
+           RESPONSIVE
+        ===================================================== */
 
-        @media (max-width: 1100px) {
+        @media (max-width: 1150px) {
+
+            .sidebar {
+                width: 220px;
+            }
+
             .main {
+                margin-left: var(--admin-sidebar-width, 225px);
+
                 padding: 30px;
             }
 
             .mini-stats {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns:
+                    repeat(2, 1fr);
             }
 
             .panel-top {
                 align-items: flex-start;
+
                 flex-direction: column;
             }
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 760px) {
+
+            .sidebar {
+                position: static;
+
+                width: 100%;
+                height: auto;
+
+                padding: 18px;
+            }
+
+            .brand {
+                padding: 5px 8px 18px;
+            }
+
+            .admin-box {
+                margin-bottom: 15px;
+            }
+
+            .nav {
+                display: grid;
+
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+
+            .sidebar-bottom {
+                margin-top: 8px;
+            }
+
             .main {
                 margin-left: 0;
+
                 padding: 25px 18px;
             }
 
             .header {
                 align-items: flex-start;
+
                 flex-direction: column;
             }
 
@@ -858,6 +1270,7 @@ if ($count_result) {
 
             .add-button {
                 width: 100%;
+
                 justify-content: center;
             }
         }
@@ -883,7 +1296,6 @@ if ($count_result) {
             .clear-button {
                 width: 100%;
             }
-
         }
 
     </style>
@@ -891,28 +1303,124 @@ if ($count_result) {
 </head>
 
 <body>
-        <?php
+
+<?php
+    /*
+     * CAFELIA MASTER ADMIN SIDEBAR
+     * This page is the Products page, so the Products menu is active.
+     */
     $active_admin_page = "products";
     include "sidebar.php";
-    ?>
+?>
 
-    <main class="main">
 
-        <header class="header">
-            <div>
-                <div class="eyebrow">Cafelia Admin</div>
-                <h2>Products</h2>
-                <p>Manage your coffee products, pricing, inventory, and availability.</p>
+<!-- =========================================================
+     MAIN
+========================================================= -->
+
+<main class="main">
+
+
+    <header class="header">
+
+        <div>
+
+            <div class="eyebrow">
+                Cafelia Management
             </div>
 
-            <a href="add-product.php" class="add-button">
-                <span>＋</span> Add Product
-            </a>
-        </header>
+            <h2>
+                Products
+            </h2>
 
-    <!-- MINI STATS -->
+            <p>
+                Manage your coffee products, pricing,
+                inventory, and availability.
+            </p>
+
+        </div>
+
+
+        <a
+            href="add-product.php"
+            class="add-button"
+        >
+
+            <span>
+                ＋
+            </span>
+
+            Add Product
+
+        </a>
+
+    </header>
+
+
+    <!-- =====================================================
+         SUCCESS / ERROR MESSAGES
+    ====================================================== -->
+
+    <?php if (isset($_GET["success"])): ?>
+
+        <?php if ($_GET["success"] === "created"): ?>
+
+            <div class="product-message success">
+                Product added successfully to the database.
+            </div>
+
+        <?php elseif ($_GET["success"] === "updated"): ?>
+
+            <div class="product-message success">
+                Product updated successfully.
+            </div>
+
+        <?php elseif ($_GET["success"] === "deleted"): ?>
+
+            <div class="product-message success">
+                Product deleted successfully.
+            </div>
+
+        <?php endif; ?>
+
+    <?php endif; ?>
+
+
+    <?php if (isset($_GET["stock_added"])): ?>
+
+        <div class="product-message success">
+            Product stock updated successfully.
+        </div>
+
+    <?php endif; ?>
+
+
+    <?php if (isset($_GET["delete_error"])): ?>
+
+        <div class="product-message error">
+
+            <?php if ($_GET["delete_error"] === "ordered"): ?>
+
+                This product cannot be deleted because it already
+                has order history.
+
+            <?php else: ?>
+
+                Unable to delete the product.
+
+            <?php endif; ?>
+
+        </div>
+
+    <?php endif; ?>
+
+
+    <!-- =====================================================
+         MINI STATS
+    ====================================================== -->
 
     <section class="mini-stats">
+
 
         <div class="mini-card">
 
@@ -997,14 +1505,19 @@ if ($count_result) {
 
         </div>
 
+
     </section>
 
 
-    <!-- PRODUCT PANEL -->
+    <!-- =====================================================
+         PRODUCT PANEL
+    ====================================================== -->
 
     <section class="panel">
 
+
         <div class="panel-top">
+
 
             <div class="panel-title">
 
@@ -1025,6 +1538,7 @@ if ($count_result) {
                 class="filters"
             >
 
+
                 <div class="search-box">
 
                     <span class="search-icon">
@@ -1035,9 +1549,7 @@ if ($count_result) {
                         type="text"
                         name="search"
                         placeholder="Search products..."
-                        value="<?php
-                            echo htmlspecialchars($search);
-                        ?>"
+                        value="<?php echo e($search); ?>"
                     >
 
                 </div>
@@ -1055,11 +1567,7 @@ if ($count_result) {
                     <?php foreach ($categories as $item_category): ?>
 
                         <option
-                            value="<?php
-                                echo htmlspecialchars(
-                                    $item_category
-                                );
-                            ?>"
+                            value="<?php echo e($item_category); ?>"
                             <?php
                             echo $category === $item_category
                                 ? "selected"
@@ -1068,9 +1576,7 @@ if ($count_result) {
                         >
 
                             <?php
-                            echo htmlspecialchars(
-                                $item_category
-                            );
+                            echo e($item_category);
                             ?>
 
                         </option>
@@ -1099,12 +1605,15 @@ if ($count_result) {
 
                 <?php endif; ?>
 
+
             </form>
 
         </div>
 
 
-        <!-- TABLE -->
+        <!-- =================================================
+             TABLE
+        ================================================== -->
 
         <div class="table-wrap">
 
@@ -1131,6 +1640,10 @@ if ($count_result) {
                         </th>
 
                         <th>
+                            Date Added
+                        </th>
+
+                        <th>
                             Stock
                         </th>
 
@@ -1149,248 +1662,345 @@ if ($count_result) {
 
                 <tbody>
 
-                    <?php if ($products->num_rows > 0): ?>
 
-                        <?php while ($product = $products->fetch_assoc()): ?>
+                <?php if ($products->num_rows > 0): ?>
 
-                            <?php
 
-                            $stock = (int)$product["stock"];
+                    <?php while ($product = $products->fetch_assoc()): ?>
 
-                            if ($stock <= 0) {
+                        <?php
 
-                                $stock_class = "out";
-                                $stock_note = "Out of stock";
+                        $stock = (int)$product["stock"];
 
-                            } elseif ($stock <= 5) {
+                        /*
+                         * STOCK RULE:
+                         *
+                         * 0     = Out of stock
+                         * 1-4   = Low stock
+                         * 5     = Full stock
+                         */
 
-                                $stock_class = "low";
-                                $stock_note = "Low stock";
+                        if ($stock <= 0) {
 
-                            } else {
+                            $stock_class = "out";
+                            $stock_note = "Out of stock";
 
-                                $stock_class = "good";
-                                $stock_note = "Available";
+                        } elseif ($stock >= $MAX_STOCK) {
 
-                            }
+                            $stock_class = "good";
+                            $stock_note = "Full stock";
 
-                            $image = trim(
-                                $product["image"] ?? ""
+                        } else {
+
+                            $stock_class = "low";
+                            $stock_note = "Low stock";
+
+                        }
+
+                        $image = trim(
+                            $product["image"] ?? ""
+                        );
+
+                        $status = strtolower(
+                            trim(
+                                (string)($product["status"] ?? "")
+                            )
+                        );
+
+                        /*
+                         * A product with stock 0 is visually inactive.
+                         * A product with stock > 0 is active when the
+                         * database status is Active/Available.
+                         */
+
+                        $is_active =
+                            $stock > 0 &&
+                            in_array(
+                                $status,
+                                ["active", "available"],
+                                true
                             );
 
-                            ?>
-
-                            <tr>
-
-                                <!-- IMAGE -->
-
-                                <td>
-
-                                    <?php if ($image !== ""): ?>
-
-                                        <img
-                                            src="../image/<?php
-                                                echo htmlspecialchars(
-                                                    $image
-                                                );
-                                            ?>"
-                                            alt="<?php
-                                                echo htmlspecialchars(
-                                                    $product["name"]
-                                                );
-                                            ?>"
-                                            class="product-image"
-                                            onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"
-                                        >
-
-                                        <div
-                                            class="no-image"
-                                            style="display:none;"
-                                        >
-                                            ☕
-                                        </div>
-
-                                    <?php else: ?>
-
-                                        <div class="no-image">
-                                            ☕
-                                        </div>
-
-                                    <?php endif; ?>
-
-                                </td>
+                        ?>
 
 
-                                <!-- PRODUCT -->
+                        <tr>
 
-                                <td>
 
-                                    <div class="product-name">
+                            <!-- IMAGE -->
+
+                            <td>
+
+                                <?php if ($image !== ""): ?>
+
+                                    <img
+                                        src="../image/<?php echo e($image); ?>"
+                                        alt="<?php echo e($product["name"]); ?>"
+                                        class="product-image"
+                                        onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"
+                                    >
+
+                                    <div
+                                        class="no-image"
+                                        style="display:none;"
+                                    >
+                                        ☕
+                                    </div>
+
+                                <?php else: ?>
+
+                                    <div class="no-image">
+                                        ☕
+                                    </div>
+
+                                <?php endif; ?>
+
+                            </td>
+
+
+                            <!-- PRODUCT -->
+
+                            <td>
+
+                                <div class="product-name">
+
+                                    <strong>
+                                        <?php
+                                        echo e(
+                                            $product["name"]
+                                        );
+                                        ?>
+                                    </strong>
+
+                                    <small>
+                                        <?php
+                                        echo e(
+                                            $product["description"]
+                                        );
+                                        ?>
+                                    </small>
+
+                                </div>
+
+                            </td>
+
+
+                            <!-- CATEGORY -->
+
+                            <td>
+
+                                <span class="category">
+
+                                    <?php
+                                    echo e(
+                                        $product["category"] ?: "Coffee"
+                                    );
+                                    ?>
+
+                                </span>
+
+                            </td>
+
+
+                            <!-- PRICE -->
+
+                            <td class="price">
+
+                                ₱<?php
+
+                                echo number_format(
+                                    (float)$product["price"],
+                                    2
+                                );
+
+                                ?>
+
+                            </td>
+
+
+                            <!-- DATE ADDED -->
+
+                            <td>
+
+                                <div class="date-added">
+
+                                    <?php if (!empty($product["created_at"])): ?>
 
                                         <strong>
+
                                             <?php
-                                            echo htmlspecialchars(
-                                                $product["name"]
+
+                                            echo date(
+                                                "M d, Y",
+                                                strtotime(
+                                                    $product["created_at"]
+                                                )
                                             );
+
                                             ?>
+
                                         </strong>
 
                                         <small>
+
                                             <?php
-                                            echo htmlspecialchars(
-                                                $product["description"]
+
+                                            echo date(
+                                                "h:i A",
+                                                strtotime(
+                                                    $product["created_at"]
+                                                )
                                             );
+
                                             ?>
+
                                         </small>
 
-                                    </div>
+                                    <?php else: ?>
 
-                                </td>
+                                        <span>
+                                            —
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </td>
 
 
-                                <!-- CATEGORY -->
+                            <!-- STOCK -->
 
-                                <td>
+                            <td>
 
-                                    <span class="category">
+                                <div
+                                    class="stock <?php echo $stock_class; ?>"
+                                >
+
+                                    <?php
+                                    echo $stock;
+                                    ?>
+
+                                    <span class="stock-note">
 
                                         <?php
-                                        echo htmlspecialchars(
-                                            $product["category"]
-                                        );
+                                        echo $stock_note;
                                         ?>
 
                                     </span>
 
-                                </td>
-
-
-                                <!-- PRICE -->
-
-                                <td class="price">
-
-                                    ₱<?php
-                                    echo number_format(
-                                        (float)$product["price"],
-                                        2
-                                    );
-                                    ?>
-
-                                </td>
-
-
-                                <!-- STOCK -->
-
-                                <td>
-
-                                    <div
-                                        class="stock <?php
-                                            echo $stock_class;
-                                        ?>"
-                                    >
-
-                                        <?php
-                                        echo $stock;
-                                        ?>
-
-                                        <span class="stock-note">
-                                            <?php
-                                            echo $stock_note;
-                                            ?>
-                                        </span>
-
-                                    </div>
-
-                                </td>
-
-
-                                <!-- STATUS -->
-
-                                <td>
-
-                                    <?php if (
-                                        in_array(
-                                            strtolower(trim((string)$product["status"])),
-                                            ["active", "available"],
-                                            true
-                                        )
-                                    ): ?>
-
-                                        <span class="status active">
-                                            Active
-                                        </span>
-
-                                    <?php else: ?>
-
-                                        <span class="status inactive">
-                                            Inactive
-                                        </span>
-
-                                    <?php endif; ?>
-
-                                </td>
-
-
-                                <!-- ACTIONS -->
-
-                                <td>
-
-                                    <div class="actions">
-
-                                        <a
-                                            href="edit-product.php?id=<?php
-                                                echo (int)$product["id"];
-                                            ?>"
-                                            class="action edit"
-                                        >
-                                            Edit
-                                        </a>
-
-
-                                        <a
-                                            href="delete-product.php?id=<?php
-                                                echo (int)$product["id"];
-                                            ?>"
-                                            class="action delete"
-                                            onclick="return confirm('Are you sure you want to delete this product?');"
-                                        >
-                                            Delete
-                                        </a>
-
-                                    </div>
-
-                                </td>
-
-                            </tr>
-
-                        <?php endwhile; ?>
-
-                    <?php else: ?>
-
-                        <tr>
-
-                            <td
-                                colspan="7"
-                                class="empty"
-                            >
-
-                                <div class="empty-icon">
-                                    ☕
                                 </div>
-
-                                <strong>
-                                    No products found
-                                </strong>
-
-                                <p>
-                                    Try changing your search or category filter.
-                                </p>
 
                             </td>
 
+
+                            <!-- STATUS -->
+
+                            <td>
+
+                                <?php if ($is_active): ?>
+
+                                    <span class="status active">
+                                        Active
+                                    </span>
+
+                                <?php else: ?>
+
+                                    <span class="status inactive">
+                                        Inactive
+                                    </span>
+
+                                <?php endif; ?>
+
+                            </td>
+
+
+                            <!-- ACTIONS -->
+
+                            <td>
+
+                                <div class="actions">
+
+
+                                    <!--
+                                         ADD STOCK ONLY WHEN
+                                         STOCK IS BELOW 5
+                                    -->
+
+                                    <?php if ($stock < $MAX_STOCK): ?>
+
+                                        <a
+                                            href="add-stock.php?id=<?php echo (int)$product["id"]; ?>"
+                                            class="action stock-add"
+                                        >
+                                            + Add Stock
+                                        </a>
+
+                                    <?php endif; ?>
+
+
+                                    <!-- EDIT -->
+
+                                    <a
+                                        href="edit-product.php?id=<?php echo (int)$product["id"]; ?>"
+                                        class="action edit"
+                                    >
+                                        Edit
+                                    </a>
+
+
+                                    <!-- DELETE -->
+
+                                    <a
+                                        href="delete-product.php?id=<?php echo (int)$product["id"]; ?>"
+                                        class="action delete"
+                                        onclick="return confirm('Are you sure you want to delete this product?');"
+                                    >
+                                        Delete
+                                    </a>
+
+
+                                </div>
+
+                            </td>
+
+
                         </tr>
 
-                    <?php endif; ?>
+
+                    <?php endwhile; ?>
+
+
+                <?php else: ?>
+
+
+                    <tr>
+
+                        <td
+                            colspan="8"
+                            class="empty"
+                        >
+
+                            <div class="empty-icon">
+                                ☕
+                            </div>
+
+                            <strong>
+                                No products found
+                            </strong>
+
+                            <p>
+                                Try changing your search
+                                or category filter.
+                            </p>
+
+                        </td>
+
+                    </tr>
+
+
+                <?php endif; ?>
+
 
                 </tbody>
 
@@ -1403,4 +2013,5 @@ if ($count_result) {
 </main>
 
 </body>
+
 </html>

@@ -5,6 +5,192 @@ session_start();
 require_once __DIR__ . "/config/database.php";
 
 /* =========================================================
+   DATABASE CART — AJAX ADD TO CART
+   Connected to the current Cafelia checkout/payment system.
+========================================================= */
+if (
+    $_SERVER["REQUEST_METHOD"] === "POST" &&
+    ($_POST["action"] ?? "") === "add_to_cart"
+) {
+    header("Content-Type: application/json; charset=UTF-8");
+
+    if (!isset($_SESSION["user_id"])) {
+        echo json_encode([
+            "success" => false,
+            "login_required" => true,
+            "message" => "Please log in before adding items to your cart."
+        ]);
+        exit;
+    }
+
+    $user_id = (int) $_SESSION["user_id"];
+    $product_id = (int) ($_POST["product_id"] ?? 0);
+    $quantity = (int) ($_POST["quantity"] ?? 1);
+
+    if ($product_id <= 0 || $quantity <= 0 || $quantity > 5) {
+        echo json_encode([
+            "success" => false,
+            "message" => "You can add 1 to 5 units per product."
+        ]);
+        exit;
+    }
+
+    try {
+        $conn->begin_transaction();
+
+        /* Lock the product while checking real stock. */
+        $product_stmt = $conn->prepare(
+            "SELECT id, name, price, stock, status
+             FROM products
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE"
+        );
+
+        if (!$product_stmt) {
+            throw new Exception("Unable to verify the product.");
+        }
+
+        $product_stmt->bind_param("i", $product_id);
+        $product_stmt->execute();
+        $product = $product_stmt->get_result()->fetch_assoc();
+        $product_stmt->close();
+
+        if (!$product) {
+            throw new Exception("Product not found.");
+        }
+
+        $stock = (int) $product["stock"];
+        $status = strtolower(trim((string) $product["status"]));
+
+        if ($status !== "available" || $stock <= 0) {
+            throw new Exception($product["name"] . " is currently unavailable.");
+        }
+
+        /* One customer may add a maximum of 5 units of one product. */
+        $cart_stmt = $conn->prepare(
+            "SELECT id, quantity
+             FROM cart
+             WHERE user_id = ?
+               AND product_id = ?
+             LIMIT 1
+             FOR UPDATE"
+        );
+
+        if (!$cart_stmt) {
+            throw new Exception("Unable to check your cart.");
+        }
+
+        $cart_stmt->bind_param("ii", $user_id, $product_id);
+        $cart_stmt->execute();
+        $existing = $cart_stmt->get_result()->fetch_assoc();
+        $cart_stmt->close();
+
+        $existing_quantity = $existing ? (int) $existing["quantity"] : 0;
+        $new_quantity = $existing_quantity + $quantity;
+
+        if ($new_quantity > 5) {
+            throw new Exception(
+                "You can only order up to 5 units of " . $product["name"] . "."
+            );
+        }
+
+        if ($new_quantity > $stock) {
+            throw new Exception(
+                "Only " . $stock . " unit(s) of " . $product["name"] . " are available."
+            );
+        }
+
+        if ($existing) {
+            $update_stmt = $conn->prepare(
+                "UPDATE cart
+                 SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND user_id = ?"
+            );
+
+            if (!$update_stmt) {
+                throw new Exception("Unable to update your cart.");
+            }
+
+            $cart_id = (int) $existing["id"];
+            $update_stmt->bind_param("iii", $new_quantity, $cart_id, $user_id);
+
+            if (!$update_stmt->execute()) {
+                $update_stmt->close();
+                throw new Exception("Unable to update your cart.");
+            }
+
+            $update_stmt->close();
+        } else {
+            $insert_stmt = $conn->prepare(
+                "INSERT INTO cart (user_id, product_id, quantity)
+                 VALUES (?, ?, ?)"
+            );
+
+            if (!$insert_stmt) {
+                throw new Exception("Unable to add the item to your cart.");
+            }
+
+            $insert_stmt->bind_param("iii", $user_id, $product_id, $quantity);
+
+            if (!$insert_stmt->execute()) {
+                $insert_stmt->close();
+                throw new Exception("Unable to add the item to your cart.");
+            }
+
+            $insert_stmt->close();
+        }
+
+        $count_stmt = $conn->prepare(
+            "SELECT COALESCE(SUM(quantity), 0) AS cart_count
+             FROM cart
+             WHERE user_id = ?"
+        );
+
+        if (!$count_stmt) {
+            throw new Exception("Unable to refresh cart count.");
+        }
+
+        $count_stmt->bind_param("i", $user_id);
+        $count_stmt->execute();
+        $count_row = $count_stmt->get_result()->fetch_assoc();
+        $count_stmt->close();
+
+        $cart_count = (int) ($count_row["cart_count"] ?? 0);
+        $remaining_stock = max(0, min($stock, 5) - $new_quantity);
+
+        $conn->commit();
+
+        echo json_encode([
+            "success" => true,
+            "product_name" => $product["name"],
+            "quantity_added" => $quantity,
+            "cart_quantity" => $new_quantity,
+            "cart_count" => $cart_count,
+            "stock" => $stock,
+            "remaining" => $remaining_stock,
+            "message" => $product["name"] . " added to your cart."
+        ]);
+        exit;
+
+    } catch (Throwable $e) {
+        try {
+            $conn->rollback();
+        } catch (Throwable $ignored) {
+        }
+
+        error_log("Cafelia menu add-to-cart error: " . $e->getMessage());
+
+        echo json_encode([
+            "success" => false,
+            "message" => $e->getMessage()
+        ]);
+        exit;
+    }
+}
+
+
+/* =========================================================
    GET PRODUCTS
 ========================================================= */
 
@@ -45,6 +231,38 @@ if ($category_result) {
 
     }
 
+}
+
+
+
+/* =========================================================
+   CURRENT CUSTOMER DATABASE CART
+========================================================= */
+$user_id = isset($_SESSION["user_id"]) ? (int) $_SESSION["user_id"] : 0;
+$cart_quantities = [];
+$cart_count = 0;
+
+if ($user_id > 0) {
+    $cart_stmt = $conn->prepare(
+        "SELECT product_id, quantity
+         FROM cart
+         WHERE user_id = ?"
+    );
+
+    if ($cart_stmt) {
+        $cart_stmt->bind_param("i", $user_id);
+        $cart_stmt->execute();
+        $cart_result = $cart_stmt->get_result();
+
+        while ($cart_row = $cart_result->fetch_assoc()) {
+            $pid = (int) $cart_row["product_id"];
+            $qty = (int) $cart_row["quantity"];
+            $cart_quantities[$pid] = $qty;
+            $cart_count += $qty;
+        }
+
+        $cart_stmt->close();
+    }
 }
 
 ?>
@@ -394,6 +612,31 @@ if ($category_result) {
     font-size: 1.08rem;
     font-weight: 800;
     white-space: nowrap;
+}
+
+.menu-product-price + .menu-stock-note,
+.menu-stock-note {
+    display: block;
+    margin-top: 4px;
+    color: #9a806c;
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+}
+
+.menu-add-form { margin: 0; }
+
+.menu-add-button {
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.menu-add-button.disabled,
+.menu-add-button:disabled {
+    opacity: .48;
+    cursor: not-allowed;
+    transform: none !important;
 }
 
 .menu-add-button {
@@ -1030,13 +1273,152 @@ if ($category_result) {
     }
 }
 
+
+
+/* =========================================================
+   DATABASE ORDERING CONTROLS
+========================================================= */
+.menu-stock-info {
+    min-height: 18px;
+    margin-top: 12px;
+    color: #9a806c;
+    font-size: .68rem;
+    font-weight: 700;
+}
+
+.menu-stock-info .stock-out {
+    color: #a33b32;
+}
+
+.menu-order-controls {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.quantity-control {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #dfd0c2;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #fbf7f2;
+}
+
+.quantity-btn {
+    width: 32px;
+    height: 34px;
+    border: 0;
+    background: transparent;
+    color: #3b2115;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.quantity-btn:hover:not(:disabled) {
+    background: #eadbc9;
+}
+
+.quantity-btn:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.quantity-value {
+    min-width: 25px;
+    text-align: center;
+    color: #3b2115;
+    font-size: .78rem;
+    font-weight: 800;
+}
+
+.menu-add-button.added {
+    background: #6b4126;
+}
+
+.menu-cart-notification {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 10000;
+    width: min(380px, calc(100vw - 32px));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 17px;
+    border: 1px solid rgba(216,163,109,.35);
+    border-radius: 15px;
+    background: rgba(59,33,21,.96);
+    color: #fffaf3;
+    box-shadow: 0 18px 45px rgba(0,0,0,.24);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(14px);
+    pointer-events: none;
+    transition: .22s ease;
+}
+
+.menu-cart-notification.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.menu-notification-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #c89b6d;
+    color: #3b2115;
+    font-weight: 900;
+}
+
+.menu-cart-notification strong,
+.menu-cart-notification span {
+    display: block;
+}
+
+.menu-cart-notification strong {
+    font-size: .72rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.menu-cart-notification #menu-notification-text {
+    margin-top: 3px;
+    color: rgba(255,250,243,.70);
+    font-size: .72rem;
+}
+
+@media (max-width: 650px) {
+    .menu-product-bottom {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .menu-order-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .menu-add-button {
+        flex: 1;
+    }
+}
+
 </style>
 
 </head>
 
 <body>
- 
- <?php
+
+<?php
 $active_page = "menu";
 include "navbar.php";
 ?>
@@ -1056,9 +1438,9 @@ include "navbar.php";
         </span>
 
         <h1>
-           <span class="something-text">Something</span>
-           <br>
-           <strong>Good Is Brewing.</strong>
+            Something
+            <br>
+            <strong>Good Is Brewing.</strong>
         </h1>
 
         <p>
@@ -1148,150 +1530,123 @@ include "navbar.php";
 
         <div class="menu-products">
 
-            <?php if (!empty($products)): ?>
+    <?php if (!empty($products)): ?>
 
-                <?php foreach ($products as $product): ?>
+        <?php foreach ($products as $product): ?>
 
-                    <?php
+            <?php
+                $product_id = (int) $product['id'];
+                $stock = (int) ($product['stock'] ?? 0);
+                $in_cart = (int) ($cart_quantities[$product_id] ?? 0);
+                $remaining = max(0, min($stock, 5) - $in_cart);
+                $out_of_stock = $remaining <= 0;
+                $product_image = !empty($product['image'])
+                    ? basename($product['image'])
+                    : '';
+            ?>
 
-                    $product_image = !empty($product['image'])
-                        ? basename($product['image'])
-                        : '';
+            <article
+                class="menu-product-card order-menu-item"
+                data-category="<?php echo htmlspecialchars($product['category'], ENT_QUOTES); ?>"
+                data-product-id="<?php echo $product_id; ?>"
+                data-product="<?php echo htmlspecialchars($product['name'], ENT_QUOTES); ?>"
+                data-stock="<?php echo $stock; ?>"
+                data-cart-quantity="<?php echo $in_cart; ?>"
+            >
 
-                    ?>
+                <div class="menu-product-image">
+                    <?php if ($product_image !== ''): ?>
+                        <img
+                            src="image/<?php echo htmlspecialchars($product_image, ENT_QUOTES); ?>"
+                            alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES); ?>"
+                            loading="lazy"
+                        >
+                    <?php else: ?>
+                        <div class="menu-product-placeholder">☕</div>
+                    <?php endif; ?>
 
-                    <article
-                        class="menu-product-card"
-                        data-category="<?php
-                            echo htmlspecialchars(
-                                $product['category'],
-                                ENT_QUOTES
-                            );
-                        ?>"
-                    >
+                    <span class="menu-product-category">
+                        <?php echo htmlspecialchars($product['category']); ?>
+                    </span>
+                </div>
 
-                        <!-- IMAGE -->
-
-                        <div class="menu-product-image">
-
-                            <?php if ($product_image !== ''): ?>
-
-                                <img
-                                    src="image/<?php
-                                        echo htmlspecialchars(
-                                            $product_image
-                                        );
-                                    ?>"
-                                    alt="<?php
-                                        echo htmlspecialchars(
-                                            $product['name']
-                                        );
-                                    ?>"
-                                >
-
-                            <?php else: ?>
-
-                                <div class="menu-product-placeholder">
-                                    ☕
-                                </div>
-
-                            <?php endif; ?>
-
-                            <!-- CATEGORY -->
-
-                            <span class="menu-product-category">
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $product['category']
-                                );
-                                ?>
-
-                            </span>
-
-                        </div>
-
-                        <!-- PRODUCT INFORMATION -->
-
-                        <div class="menu-product-info">
-
-                            <span class="menu-product-kicker">
-                                CAFELIA FAVORITE
-                            </span>
-
-                            <h3>
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $product['name']
-                                );
-                                ?>
-
-                            </h3>
-
-                            <p>
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $product['description'] ?? ''
-                                );
-                                ?>
-
-                            </p>
-
-                            <div class="menu-product-bottom">
-
-                                <span class="menu-product-price">
-
-                                    ₱<?php
-                                    echo number_format(
-                                        (float)$product['price'],
-                                        2
-                                    );
-                                    ?>
-
-                                </span>
-
-                                <a
-                                    href="cart.php?action=add&amp;product_id=<?php echo (int) $product['id']; ?>&amp;quantity=1"
-                                    class="menu-add-button"
-                                >
-                                    ADD TO CART
-                                    <span aria-hidden="true">+</span>
-                                </a>
-
-                            </div>
-
-                        </div>
-
-                    </article>
-
-                <?php endforeach; ?>
-
-            <?php else: ?>
-
-                <div class="menu-empty">
-
-                    <div class="menu-empty-icon">
-                        ☕
-                    </div>
+                <div class="menu-product-info">
+                    <span class="menu-product-kicker">CAFELIA FAVORITE</span>
 
                     <h3>
-                        No Products Available
+                        <?php echo htmlspecialchars($product['name']); ?>
                     </h3>
 
                     <p>
-                        Our menu is currently being prepared.
-                        Please check back soon.
+                        <?php echo htmlspecialchars($product['description'] ?? ''); ?>
                     </p>
 
+                    <div class="menu-stock-info">
+                        <?php if ($out_of_stock): ?>
+                            <span class="stock-out">OUT OF STOCK</span>
+                        <?php elseif ($in_cart > 0): ?>
+                            <?php echo $remaining; ?> available •
+                            <?php echo $in_cart; ?> already in cart
+                        <?php else: ?>
+                            <?php echo $stock; ?> available
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="menu-product-bottom">
+                        <div>
+                            <span class="menu-product-price">
+                                ₱<?php echo number_format((float)$product['price'], 2); ?>
+                            </span>
+                        </div>
+
+                        <div class="menu-order-controls">
+                            <div class="quantity-control">
+                                <button
+                                    type="button"
+                                    class="quantity-btn quantity-minus"
+                                    aria-label="Decrease quantity"
+                                    <?php echo $out_of_stock ? 'disabled' : ''; ?>
+                                >−</button>
+
+                                <span class="quantity-value">
+                                    <?php echo $out_of_stock ? 0 : 1; ?>
+                                </span>
+
+                                <button
+                                    type="button"
+                                    class="quantity-btn quantity-plus"
+                                    aria-label="Increase quantity"
+                                    <?php echo $out_of_stock ? 'disabled' : ''; ?>
+                                >+</button>
+                            </div>
+
+                            <button
+                                type="button"
+                                class="menu-add-button add-to-cart-btn <?php echo $out_of_stock ? 'disabled' : ''; ?>"
+                                <?php echo $out_of_stock ? 'disabled' : ''; ?>
+                            >
+                                <?php echo $out_of_stock ? 'SOLD OUT' : 'ADD TO CART'; ?>
+                                <?php if (!$out_of_stock): ?><span>+</span><?php endif; ?>
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
+            </article>
 
-            <?php endif; ?>
+        <?php endforeach; ?>
 
+    <?php else: ?>
+
+        <div class="menu-empty">
+            <div class="menu-empty-icon">☕</div>
+            <h3>No Products Available</h3>
+            <p>Our menu is currently being prepared. Please check back soon.</p>
         </div>
 
-    </div>
+    <?php endif; ?>
+
+</div>
 
 </section>
 
@@ -1368,6 +1723,195 @@ include "navbar.php";
     </div>
 
 </section>
+
+
+<!-- =========================================================
+     CART NOTIFICATION
+========================================================= -->
+<div class="menu-cart-notification" id="menu-cart-notification" role="status" aria-live="polite">
+    <span class="menu-notification-icon" aria-hidden="true">✓</span>
+    <div>
+        <strong>Added to cart!</strong>
+        <span id="menu-notification-text">Your drink has been added.</span>
+    </div>
+</div>
+
+
+<script>
+/* =========================================================
+   DATABASE CART + STOCK-AWARE ORDERING
+========================================================= */
+document.addEventListener("DOMContentLoaded", function () {
+    const menuItems = document.querySelectorAll(".order-menu-item");
+    const notification = document.getElementById("menu-cart-notification");
+    const notificationText = document.getElementById("menu-notification-text");
+
+    function showNotification(message, success = true) {
+        if (!notification || !notificationText) return;
+
+        notificationText.textContent = message;
+        notification.style.borderColor = success ? "" : "#b84a42";
+        notification.classList.add("show");
+
+        clearTimeout(notification._timer);
+        notification._timer = setTimeout(function () {
+            notification.classList.remove("show");
+        }, 2800);
+    }
+
+    menuItems.forEach(function (item) {
+        const minus = item.querySelector(".quantity-minus");
+        const plus = item.querySelector(".quantity-plus");
+        const value = item.querySelector(".quantity-value");
+        const addButton = item.querySelector(".add-to-cart-btn");
+        const stockInfo = item.querySelector(".menu-stock-info");
+
+        let quantity = Number(value?.textContent || 1);
+
+        function getRemaining() {
+            const stock = Number(item.dataset.stock || 0);
+            const inCart = Number(item.dataset.cartQuantity || 0);
+            return Math.max(0, Math.min(stock, 5) - inCart);
+        }
+
+        function refreshControls() {
+            const remaining = getRemaining();
+
+            if (remaining <= 0) {
+                quantity = 0;
+                value.textContent = "0";
+                minus.disabled = true;
+                plus.disabled = true;
+                addButton.disabled = true;
+                addButton.textContent = "SOLD OUT";
+                return;
+            }
+
+            if (quantity < 1) quantity = 1;
+            if (quantity > remaining) quantity = remaining;
+
+            value.textContent = quantity;
+            minus.disabled = quantity <= 1;
+            plus.disabled = quantity >= remaining;
+            addButton.disabled = false;
+        }
+
+        minus.addEventListener("click", function () {
+            if (quantity > 1) quantity--;
+            refreshControls();
+        });
+
+        plus.addEventListener("click", function () {
+            const remaining = getRemaining();
+            if (quantity < remaining) {
+                quantity++;
+                refreshControls();
+            } else {
+                showNotification("Only " + remaining + " unit(s) can be added.", false);
+            }
+        });
+
+        addButton.addEventListener("click", async function () {
+            const remaining = getRemaining();
+
+            if (remaining <= 0) {
+                showNotification("This product is out of stock.", false);
+                refreshControls();
+                return;
+            }
+
+            if (quantity > remaining || quantity > 5) {
+                showNotification("Maximum of 5 units per product.", false);
+                quantity = Math.min(remaining, 5);
+                refreshControls();
+                return;
+            }
+
+            addButton.disabled = true;
+            addButton.textContent = "ADDING...";
+
+            const formData = new FormData();
+            formData.append("action", "add_to_cart");
+            formData.append("product_id", item.dataset.productId);
+            formData.append("quantity", quantity);
+
+            try {
+                const response = await fetch("menu.php", {
+                    method: "POST",
+                    body: formData,
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+
+                const data = await response.json();
+
+                if (data.login_required) {
+                    showNotification("Please log in to add items to your cart.", false);
+                    addButton.textContent = "ADD TO CART";
+                    addButton.disabled = false;
+                    setTimeout(function () {
+                        window.location.href = "login.php";
+                    }, 900);
+                    return;
+                }
+
+                if (!data.success) {
+                    showNotification(data.message || "Unable to add the item to your cart.", false);
+                    refreshControls();
+                    return;
+                }
+
+                item.dataset.cartQuantity = data.cart_quantity;
+                item.dataset.stock = data.stock;
+
+                if (stockInfo) {
+                    if (Number(data.remaining) <= 0) {
+                        stockInfo.innerHTML = '<span class="stock-out">OUT OF STOCK</span>';
+                    } else {
+                        stockInfo.textContent = data.remaining + " available • " + data.cart_quantity + " already in cart";
+                    }
+                }
+
+                quantity = 1;
+
+                if (Number(data.remaining) <= 0) {
+                    value.textContent = "0";
+                    minus.disabled = true;
+                    plus.disabled = true;
+                    addButton.disabled = true;
+                    addButton.textContent = "SOLD OUT";
+                } else {
+                    value.textContent = "1";
+                    addButton.textContent = "ADDED ✓";
+                    addButton.classList.add("added");
+                    showNotification(data.quantity_added + " × " + data.product_name + " added to your cart.");
+
+                    setTimeout(function () {
+                        addButton.textContent = "ADD TO CART";
+                        addButton.classList.remove("added");
+                        refreshControls();
+                    }, 1200);
+                }
+
+                /* Refresh the master navbar cart badge immediately. */
+                const navbarBadge = document.querySelector(".cart-count");
+                if (navbarBadge) {
+                    navbarBadge.textContent = data.cart_count;
+                }
+
+            } catch (error) {
+                console.error("Cafelia add-to-cart error:", error);
+                addButton.textContent = "ADD TO CART";
+                addButton.classList.remove("added");
+                addButton.disabled = false;
+                showNotification("Unable to add this item. Please try again.", false);
+                refreshControls();
+            }
+        });
+
+        refreshControls();
+    });
+});
+</script>
 
 <!-- =========================================================
      FOOTER
@@ -1583,25 +2127,7 @@ function filterMenu(category, button) {
 </script>
 
 
-<script>
-function toggleAccountMenu(button) {
-    const menu = button.closest(".account-menu");
-    const isOpen = menu.classList.toggle("open");
-    button.setAttribute("aria-expanded", isOpen ? "true" : "false");
-}
 
-document.addEventListener("click", function (event) {
-    document.querySelectorAll(".account-menu.open").forEach(function (menu) {
-        if (!menu.contains(event.target)) {
-            menu.classList.remove("open");
-            const button = menu.querySelector(".account-trigger");
-            if (button) {
-                button.setAttribute("aria-expanded", "false");
-            }
-        }
-    });
-});
-</script>
 
 </body>
 </html>

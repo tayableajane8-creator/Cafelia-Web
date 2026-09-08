@@ -1,5 +1,4 @@
 <?php
-
 session_start();
 require_once "../config/database.php";
 
@@ -9,51 +8,67 @@ if (!isset($_SESSION["admin_id"])) {
 }
 
 $admin_name = $_SESSION["admin_name"] ?? "Administrator";
+
+function e($value): string {
+    return htmlspecialchars((string)($value ?? ""), ENT_QUOTES, "UTF-8");
+}
+
+$allowed_statuses = ["Pending", "Processing", "Completed", "Cancelled"];
 $message = "";
 $error = "";
 
-/* UPDATE ORDER STATUS */
+/* UPDATE ORDER STATUS - COMPLETED ORDERS ARE LOCKED */
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $order_id = (int) ($_POST["order_id"] ?? 0);
+    $order_id = (int)($_POST["order_id"] ?? 0);
     $status = trim($_POST["status"] ?? "");
 
-    $allowed_statuses = [
-        "Pending",
-        "Processing",
-        "Completed",
-        "Cancelled"
-    ];
-
     if ($order_id > 0 && in_array($status, $allowed_statuses, true)) {
-        $stmt = $conn->prepare(
-            "UPDATE orders SET status = ? WHERE id = ?"
+        $check = $conn->prepare(
+            "SELECT status FROM orders WHERE id = ? LIMIT 1"
         );
 
-        if ($stmt) {
-            $stmt->bind_param("si", $status, $order_id);
+        if ($check) {
+            $check->bind_param("i", $order_id);
+            $check->execute();
 
-            if ($stmt->execute()) {
-                $message = "Order #{$order_id} updated successfully.";
-            } else {
-                $error = "Unable to update the order.";
+            $result = $check->get_result();
+            $current = $result->fetch_assoc();
+
+            $check->close();
+
+            /* COMPLETED ORDERS CANNOT BE CHANGED */
+            if ($current && $current["status"] === "Completed") {
+                header("Location: orders.php?locked=1");
+                exit();
             }
 
-            $stmt->close();
+            $stmt = $conn->prepare(
+                "UPDATE orders SET status = ? WHERE id = ?"
+            );
+
+            if ($stmt) {
+                $stmt->bind_param("si", $status, $order_id);
+
+                if ($stmt->execute()) {
+                    $message = "Order #{$order_id} updated successfully.";
+                } else {
+                    $error = "Unable to update the order.";
+                }
+
+                $stmt->close();
+            } else {
+                $error = "Database error.";
+            }
         } else {
             $error = "Database error.";
         }
     }
 
     if ($message !== "" || $error !== "") {
-        $redirect = "orders.php";
-
-        if ($message !== "") {
-            $redirect .= "?updated=1";
-        } else {
-            $redirect .= "?error=1";
-        }
-
-        header("Location: " . $redirect);
+        header(
+            "Location: orders.php?" .
+            ($message !== "" ? "updated=1" : "error=1")
+        );
         exit();
     }
 }
@@ -62,14 +77,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 $search = trim($_GET["search"] ?? "");
 $status_filter = trim($_GET["status"] ?? "");
 
-$allowed_filter_statuses = [
-    "Pending",
-    "Processing",
-    "Completed",
-    "Cancelled"
-];
-
-/* ORDER STATISTICS */
+/* STATISTICS */
 $total_orders = 0;
 $pending_orders = 0;
 $processing_orders = 0;
@@ -84,26 +92,37 @@ $stats = $conn->query(
         SUM(status = 'Processing') AS processing_orders,
         SUM(status = 'Completed') AS completed_orders,
         SUM(status = 'Cancelled') AS cancelled_orders,
-        COALESCE(SUM(CASE WHEN status = 'Completed' THEN total_amount ELSE 0 END), 0) AS total_sales
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN status = 'Completed'
+                    THEN total_amount
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS total_sales
      FROM orders"
 );
 
 if ($stats) {
-    $stats_data = $stats->fetch_assoc();
+    $data = $stats->fetch_assoc();
 
-    $total_orders = (int) ($stats_data["total_orders"] ?? 0);
-    $pending_orders = (int) ($stats_data["pending_orders"] ?? 0);
-    $processing_orders = (int) ($stats_data["processing_orders"] ?? 0);
-    $completed_orders = (int) ($stats_data["completed_orders"] ?? 0);
-    $cancelled_orders = (int) ($stats_data["cancelled_orders"] ?? 0);
-    $total_sales = (float) ($stats_data["total_sales"] ?? 0);
+    $total_orders = (int)($data["total_orders"] ?? 0);
+    $pending_orders = (int)($data["pending_orders"] ?? 0);
+    $processing_orders = (int)($data["processing_orders"] ?? 0);
+    $completed_orders = (int)($data["completed_orders"] ?? 0);
+    $cancelled_orders = (int)($data["cancelled_orders"] ?? 0);
+    $total_sales = (float)($data["total_sales"] ?? 0);
 }
 
-/* BUILD ORDER QUERY */
+/* ORDERS QUERY */
 $sql = "
     SELECT
         orders.id,
         orders.total_amount,
+        orders.payment_method,
+        orders.gcash_receipt,
         orders.status,
         orders.order_date,
         users.name,
@@ -117,26 +136,33 @@ $sql = "
 $params = [];
 $types = "";
 
+/* SEARCH */
 if ($search !== "") {
     $sql .= "
         AND (
             orders.id LIKE ?
             OR users.name LIKE ?
             OR users.email LIKE ?
+            OR orders.payment_method LIKE ?
+            OR orders.gcash_receipt LIKE ?
         )
     ";
 
-    $search_value = "%" . $search . "%";
+    $search_value = "%{$search}%";
 
     $params[] = $search_value;
     $params[] = $search_value;
     $params[] = $search_value;
+    $params[] = $search_value;
+    $params[] = $search_value;
 
-    $types .= "sss";
+    $types = "sssss";
 }
 
-if (in_array($status_filter, $allowed_filter_statuses, true)) {
+/* STATUS FILTER */
+if (in_array($status_filter, $allowed_statuses, true)) {
     $sql .= " AND orders.status = ?";
+
     $params[] = $status_filter;
     $types .= "s";
 }
@@ -144,6 +170,7 @@ if (in_array($status_filter, $allowed_filter_statuses, true)) {
 $sql .= " ORDER BY orders.order_date DESC";
 
 $stmt = $conn->prepare($sql);
+$orders = false;
 
 if ($stmt) {
     if (!empty($params)) {
@@ -152,25 +179,37 @@ if ($stmt) {
 
     $stmt->execute();
     $orders = $stmt->get_result();
-} else {
-    $orders = false;
 }
 
 $updated = isset($_GET["updated"]);
 $error_message = isset($_GET["error"]);
-
+$locked_message = isset($_GET["locked"]);
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Orders | Cafelia Admin</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
 
     <link
         href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
@@ -192,8 +231,7 @@ $error_message = isset($_GET["error"]);
             --border: #eadfd3;
             --green: #3f7656;
             --red: #a84a45;
-            --orange: #a96f32;
-            --shadow: 0 18px 45px rgba(43, 23, 16, .08);
+            --shadow: 0 18px 45px rgba(43,23,16,.08);
         }
 
         * {
@@ -220,13 +258,8 @@ $error_message = isset($_GET["error"]);
             font: inherit;
         }
 
-        /* MAIN */
-
         .main {
             width: calc(100% - 260px);
-        }
-
-        .main {
             margin-left: 260px;
             min-height: 100vh;
             padding: 34px 38px 50px;
@@ -296,7 +329,7 @@ $error_message = isset($_GET["error"]);
             font-size: 12px;
         }
 
-        /* STAT CARDS */
+        /* STATISTICS */
 
         .stats {
             display: grid;
@@ -352,7 +385,7 @@ $error_message = isset($_GET["error"]);
             color: var(--green);
         }
 
-        /* CONTENT CARD */
+        /* CARD */
 
         .card {
             overflow: hidden;
@@ -462,11 +495,6 @@ $error_message = isset($_GET["error"]);
             font-weight: 600;
         }
 
-        .clear-btn:hover {
-            color: var(--espresso);
-            border-color: #d9c9ba;
-        }
-
         /* TABLE */
 
         .table-wrap {
@@ -475,7 +503,7 @@ $error_message = isset($_GET["error"]);
 
         table {
             width: 100%;
-            min-width: 850px;
+            min-width: 1080px;
             border-collapse: collapse;
         }
 
@@ -570,6 +598,54 @@ $error_message = isset($_GET["error"]);
             font-size: 11px;
         }
 
+        /* PAYMENT */
+
+        .payment-cell {
+            min-width: 175px;
+        }
+
+        .payment-method {
+            display: inline-flex;
+            align-items: center;
+            min-width: 72px;
+            margin-bottom: 4px;
+            padding: 5px 9px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .payment-method.gcash {
+            background: #eee8f8;
+            border: 1px solid #ddd2ef;
+            color: #694e91;
+        }
+
+        .payment-method.cash {
+            background: #e7f3eb;
+            border: 1px solid #cbe4d3;
+            color: #39704e;
+        }
+
+        .receipt-number {
+            max-width: 190px;
+            color: #7d6b5e;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        .cash-note,
+        .no-receipt {
+            color: var(--muted);
+            font-size: 10px;
+        }
+
+        .no-receipt {
+            color: var(--red);
+        }
+
         /* STATUS */
 
         .status-form {
@@ -610,6 +686,29 @@ $error_message = isset($_GET["error"]);
             background: #f8e8e6;
             border-color: #edd0cd;
             color: #9c4945;
+        }
+
+        /* COMPLETED - NO ARROW */
+
+        .completed-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 125px;
+            height: 35px;
+            padding: 0 12px;
+            border-radius: 9px;
+            background: #e7f3eb;
+            border: 1px solid #cbe4d3;
+            color: #39704e;
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .completed-status::before {
+            content: "✓";
+            margin-right: 6px;
+            font-size: 11px;
         }
 
         /* EMPTY */
@@ -688,6 +787,7 @@ $error_message = isset($_GET["error"]);
                 grid-template-columns: repeat(3, 1fr);
             }
         }
+
         @media (max-width: 900px) {
             .main {
                 width: 100%;
@@ -719,10 +819,6 @@ $error_message = isset($_GET["error"]);
             .clear-btn {
                 width: 100%;
             }
-
-            .nav {
-                grid-template-columns: repeat(2, 1fr);
-            }
         }
 
         @media (max-width: 430px) {
@@ -740,62 +836,84 @@ $error_message = isset($_GET["error"]);
         }
 
     </style>
+
 </head>
 
 <body>
-    
+
 <?php
-    $active_admin_page = "orders";
-    include "sidebar.php";
-    ?>
-    
+$active_admin_page = "orders";
+include "sidebar.php";
+?>
+
 <?php if ($updated): ?>
+
     <div class="toast">
         ✓ Order status updated successfully.
     </div>
+
 <?php endif; ?>
 
 <?php if ($error_message): ?>
+
     <div class="toast error">
         ✕ Unable to update the order.
     </div>
+
 <?php endif; ?>
 
-    
+<?php if ($locked_message): ?>
 
+    <div class="toast error">
+        🔒 Completed orders cannot be changed.
+    </div>
 
+<?php endif; ?>
 
-<!-- MAIN -->
 
 <main class="main">
 
     <header class="topbar">
 
         <div>
-            <div class="eyebrow">Cafelia Administration</div>
 
-            <h1>Orders</h1>
+            <div class="eyebrow">
+                Cafelia Administration
+            </div>
+
+            <h1>
+                Orders
+            </h1>
 
             <p>
                 Track customer purchases and manage order progress.
             </p>
+
         </div>
+
 
         <div class="admin-user">
 
             <div class="avatar">
                 <?php
-                echo strtoupper(
-                    substr($admin_name, 0, 1)
+                echo e(
+                    strtoupper(
+                        substr($admin_name, 0, 1)
+                    )
                 );
                 ?>
             </div>
 
             <div>
-                <small>Signed in as</small>
+
+                <small>
+                    Signed in as
+                </small>
+
                 <strong>
-                    <?php echo htmlspecialchars($admin_name); ?>
+                    <?php echo e($admin_name); ?>
                 </strong>
+
             </div>
 
         </div>
@@ -902,7 +1020,9 @@ $error_message = isset($_GET["error"]);
 
             <div class="card-title">
 
-                <h2>Order Management</h2>
+                <h2>
+                    Order Management
+                </h2>
 
                 <p>
                     Search customers or update an order's current status.
@@ -919,13 +1039,15 @@ $error_message = isset($_GET["error"]);
 
                 <div class="search-box">
 
-                    <span>⌕</span>
+                    <span>
+                        ⌕
+                    </span>
 
                     <input
                         type="text"
                         name="search"
                         placeholder="Search order, customer, or email..."
-                        value="<?php echo htmlspecialchars($search); ?>"
+                        value="<?php echo e($search); ?>"
                     >
 
                 </div>
@@ -940,17 +1062,17 @@ $error_message = isset($_GET["error"]);
                         All Statuses
                     </option>
 
-                    <?php foreach ($allowed_filter_statuses as $filter_status): ?>
+                    <?php foreach ($allowed_statuses as $filter_status): ?>
 
                         <option
-                            value="<?php echo $filter_status; ?>"
+                            value="<?php echo e($filter_status); ?>"
                             <?php
                             echo $status_filter === $filter_status
                                 ? "selected"
                                 : "";
                             ?>
                         >
-                            <?php echo $filter_status; ?>
+                            <?php echo e($filter_status); ?>
                         </option>
 
                     <?php endforeach; ?>
@@ -1005,6 +1127,10 @@ $error_message = isset($_GET["error"]);
                             </th>
 
                             <th>
+                                Payment
+                            </th>
+
+                            <th>
                                 Status
                             </th>
 
@@ -1022,51 +1148,88 @@ $error_message = isset($_GET["error"]);
                     <?php while ($order = $orders->fetch_assoc()): ?>
 
                         <?php
-                        $customer_name = $order["name"];
-                        $initials = strtoupper(
-                            substr(trim($customer_name), 0, 1)
-                        );
 
-                        $status_class = strtolower(
-                            $order["status"]
-                        );
+                        $customer_name =
+                            $order["name"] ?? "Customer";
+
+                        $initials =
+                            strtoupper(
+                                substr(
+                                    trim($customer_name),
+                                    0,
+                                    1
+                                )
+                            );
+
+                        $status_class =
+                            strtolower(
+                                $order["status"] ?? ""
+                            );
+
+                        $payment_method =
+                            $order["payment_method"] ?? "Cash";
+
+                        $gcash_receipt =
+                            trim(
+                                $order["gcash_receipt"] ?? ""
+                            );
+
                         ?>
 
                         <tr>
 
+                            <!-- ORDER -->
+
                             <td>
 
                                 <span class="order-number">
-                                    #<?php echo (int) $order["id"]; ?>
+
+                                    #
+                                    <?php
+                                    echo (int)$order["id"];
+                                    ?>
+
                                 </span>
 
                             </td>
 
+
+                            <!-- CUSTOMER -->
 
                             <td>
 
                                 <div class="customer">
 
                                     <div class="customer-avatar">
-                                        <?php echo htmlspecialchars($initials); ?>
+
+                                        <?php
+                                        echo e($initials);
+                                        ?>
+
                                     </div>
+
 
                                     <div>
 
                                         <div class="customer-name">
+
                                             <?php
-                                            echo htmlspecialchars(
+                                            echo e(
                                                 $customer_name
                                             );
                                             ?>
+
                                         </div>
 
+
                                         <div class="customer-email">
+
                                             <?php
-                                            echo htmlspecialchars(
-                                                $order["email"]
+                                            echo e(
+                                                $order["email"] ?? ""
                                             );
                                             ?>
+
                                         </div>
 
                                     </div>
@@ -1076,91 +1239,129 @@ $error_message = isset($_GET["error"]);
                             </td>
 
 
+                            <!-- TOTAL -->
+
                             <td>
 
                                 <div class="amount">
+
                                     ₱<?php
                                     echo number_format(
-                                        (float) $order["total_amount"],
+                                        (float)$order["total_amount"],
                                         2
                                     );
                                     ?>
+
                                 </div>
 
                             </td>
 
 
-                            <td>
+                            <!-- PAYMENT -->
 
-                                <form
-                                    method="POST"
-                                    class="status-form"
-                                >
+                            <td class="payment-cell">
 
-                                    <input
-                                        type="hidden"
-                                        name="order_id"
-                                        value="<?php
-                                        echo (int) $order["id"];
-                                        ?>"
-                                    >
+                                <?php
+                                if (
+                                    strcasecmp(
+                                        $payment_method,
+                                        "GCash"
+                                    ) === 0
+                                ):
+                                ?>
 
-                                    <select
-                                        name="status"
-                                        class="status-select <?php echo htmlspecialchars($status_class); ?>"
-                                        onchange="this.form.submit()"
-                                    >
+                                    <div class="payment-method gcash">
+                                        GCash
+                                    </div>
 
-                                        <option
-                                            value="Pending"
+
+                                    <?php if ($gcash_receipt !== ""): ?>
+
+                                        <div class="receipt-number">
+
+                                            Receipt:
                                             <?php
-                                            echo $order["status"] === "Pending"
-                                                ? "selected"
-                                                : "";
+                                            echo e(
+                                                $gcash_receipt
+                                            );
                                             ?>
-                                        >
-                                            Pending
-                                        </option>
 
-                                        <option
-                                            value="Processing"
-                                            <?php
-                                            echo $order["status"] === "Processing"
-                                                ? "selected"
-                                                : "";
-                                            ?>
-                                        >
-                                            Processing
-                                        </option>
+                                        </div>
 
-                                        <option
-                                            value="Completed"
-                                            <?php
-                                            echo $order["status"] === "Completed"
-                                                ? "selected"
-                                                : "";
-                                            ?>
-                                        >
-                                            Completed
-                                        </option>
+                                    <?php else: ?>
 
-                                        <option
-                                            value="Cancelled"
-                                            <?php
-                                            echo $order["status"] === "Cancelled"
-                                                ? "selected"
-                                                : "";
-                                            ?>
-                                        >
-                                            Cancelled
-                                        </option>
+                                        <div class="no-receipt">
+                                            No receipt number
+                                        </div>
 
-                                    </select>
+                                    <?php endif; ?>
 
-                                </form>
+
+                                <?php else: ?>
+
+                                    <div class="payment-method cash">
+                                        Cash
+                                    </div>
+
+                                    <div class="cash-note">
+                                        Cash payment
+                                    </div>
+
+                                <?php endif; ?>
 
                             </td>
 
+
+                            <!-- STATUS -->
+
+                            <td class="status-cell">
+
+                                <?php if (($order["status"] ?? "") === "Completed"): ?>
+
+                                    <div class="completed-status">
+                                        Completed
+                                    </div>
+
+                                <?php else: ?>
+
+                                    <form
+                                        method="POST"
+                                        class="status-form"
+                                    >
+
+                                        <input
+                                            type="hidden"
+                                            name="order_id"
+                                            value="<?php echo (int)$order["id"]; ?>"
+                                        >
+
+                                        <select
+                                            name="status"
+                                            class="status-select <?php echo e($status_class); ?>"
+                                            onchange="this.form.submit()"
+                                        >
+
+                                            <?php foreach ($allowed_statuses as $option_status): ?>
+
+                                                <option
+                                                    value="<?php echo e($option_status); ?>"
+                                                    <?php echo (($order["status"] ?? "") === $option_status) ? "selected" : ""; ?>
+                                                >
+                                                    <?php echo e($option_status); ?>
+                                                </option>
+
+                                            <?php endforeach; ?>
+
+                                        </select>
+
+                                    </form>
+
+                                <?php endif; ?>
+
+                            </td>
+
+
+                            <!-- ORDER DATE -->
 
                             <td>
 
@@ -1198,6 +1399,7 @@ $error_message = isset($_GET["error"]);
 
                 </table>
 
+
             <?php else: ?>
 
                 <div class="empty">
@@ -1206,16 +1408,31 @@ $error_message = isset($_GET["error"]);
                         ☕
                     </div>
 
-                    <h3>No orders found</h3>
+                    <h3>
+                        No orders found
+                    </h3>
 
                     <p>
+
                         <?php
-                        if ($search !== "" || $status_filter !== "") {
-                            echo "Try changing your search or filter.";
+
+                        if (
+                            $search !== "" ||
+                            $status_filter !== ""
+                        ) {
+
+                            echo
+                                "Try changing your search or filter.";
+
                         } else {
-                            echo "Customer orders will appear here.";
+
+                            echo
+                                "Customer orders will appear here.";
+
                         }
+
                         ?>
+
                     </p>
 
                 </div>
@@ -1231,18 +1448,26 @@ $error_message = isset($_GET["error"]);
 
 <script>
 
-    setTimeout(function () {
-        const toast = document.querySelector(".toast");
+setTimeout(function () {
 
-        if (toast) {
-            toast.style.opacity = "0";
-            toast.style.transform = "translateY(-8px)";
+    const toast =
+        document.querySelector(".toast");
 
-            setTimeout(function () {
-                toast.remove();
-            }, 250);
-        }
-    }, 3000);
+    if (toast) {
+
+        toast.style.opacity = "0";
+        toast.style.transform =
+            "translateY(-8px)";
+
+        setTimeout(function () {
+
+            toast.remove();
+
+        }, 250);
+
+    }
+
+}, 3000);
 
 </script>
 

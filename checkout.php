@@ -20,7 +20,8 @@ $old = [
     "customer_email" => "",
     "phone" => "",
     "address" => "",
-    "payment_method" => ""
+    "payment_method" => "",
+    "gcash_receipt" => ""
 ];
 
 /* =========================================================
@@ -36,7 +37,8 @@ function getCartProducts(mysqli $conn, int $user_id): array
             c.product_id,
             c.quantity,
             p.name,
-            p.price
+            p.price,
+            p.stock
         FROM cart AS c
         INNER JOIN products AS p
             ON p.id = c.product_id
@@ -181,6 +183,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $old["phone"] = trim($_POST["phone"] ?? "");
     $old["address"] = trim($_POST["address"] ?? "");
     $old["payment_method"] = trim($_POST["payment_method"] ?? "");
+    $old["gcash_receipt"] = trim($_POST["gcash_receipt"] ?? "");
 
     /* -------------------------
        VALIDATION
@@ -210,6 +213,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         true
     )) {
         $error = "Please select a valid payment method.";
+
+    } elseif ($old["payment_method"] === "GCash" && !preg_match("/^[A-Za-z0-9\-]{5,100}$/", $old["gcash_receipt"])) {
+        $error = "Please enter a valid GCash receipt/reference number.";
 
     } else {
 
@@ -242,6 +248,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         } else {
 
+            foreach ($cart_products as $product) {
+                $quantity = (int) $product["quantity"];
+                $stock = (int) ($product["stock"] ?? 0);
+
+               
+                if ($quantity > $stock) {
+                    $error = "Not enough stock available for " . (string)$product["name"] . ". Please update your cart.";
+                    break;
+                }
+            }
+
+        }
+
+        if ($error === "") {
+
             $transaction_started = false;
 
             try {
@@ -269,9 +290,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         address,
                         total_amount,
                         payment_method,
+                        gcash_receipt,
                         status
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
 
                 if (!$order_stmt) {
@@ -281,7 +303,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 }
 
                 $order_stmt->bind_param(
-                    "issssdss",
+                    "issssdsss",
                     $user_id,
                     $old["customer_name"],
                     $old["customer_email"],
@@ -289,6 +311,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $old["address"],
                     $grand_total,
                     $old["payment_method"],
+                    $old["gcash_receipt"],
                     $status
                 );
 
@@ -421,7 +444,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ================================================= */
                 $conn->query(
                     "UPDATE products
-                     SET status = 'inactive'
+                     SET status = 'unavailable'
                      WHERE stock <= 0"
                 );
 
@@ -1080,11 +1103,11 @@ $cart_count = getCartCount($conn, $user_id);
             position: relative;
         }
 
-        .payment-option input {
-            position: absolute;
-            opacity: 0;
-            pointer-events: none;
-        }
+       .payment-option > input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
 
         .payment-option label {
             display: flex;
@@ -1105,7 +1128,7 @@ $cart_count = getCartCount($conn, $user_id);
             transform: translateY(-1px);
         }
 
-        .payment-option input:checked + label {
+       .payment-option > input[type="radio"]:checked + label {
             border-color: var(--caramel);
             background: #fff8f0;
             box-shadow: 0 0 0 3px rgba(185,130,79,.09);
@@ -1156,7 +1179,45 @@ $cart_count = getCartCount($conn, $user_id);
             font-weight: 800;
         }
 
-        .form-footer {
+        .gcash-receipt-field {
+    margin-top: 14px;
+    padding: 15px;
+    border: 1px solid rgba(185,130,82,.16);
+    border-radius: 12px;
+    background: rgba(185,130,82,.05);
+}
+.gcash-receipt-field label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 11px;
+    font-weight: 800;
+}
+.gcash-receipt-field input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 13px;
+    border: 1px solid rgba(72,45,31,.14);
+    border-radius: 9px;
+    background: #fffdfa;
+    color: #30211b;
+    outline: none;
+    opacity: 1;
+    pointer-events: auto;
+    position: relative;
+}
+.gcash-receipt-field input:focus {
+    border-color: #b98252;
+    box-shadow: 0 0 0 3px rgba(185,130,82,.10);
+}
+.gcash-receipt-field small {
+    display: block;
+    margin-top: 6px;
+    color: #87766a;
+    font-size: 10px;
+}
+.required { color: #a84a45; }
+
+.form-footer {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -1960,6 +2021,22 @@ $cart_count = getCartCount($conn, $user_id);
 
                             </label>
 
+                            <div class="gcash-receipt-field" id="gcashReceiptField" style="display:none;">
+                                <label for="gcash_receipt">
+                                    GCash Receipt / Reference Number <span class="required">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="gcash_receipt"
+                                    name="gcash_receipt"
+                                    value="<?php echo e($old["gcash_receipt"]); ?>"
+                                    maxlength="100"
+                                    placeholder="Enter your GCash receipt/reference number"
+                                    autocomplete="off"
+                                >
+                                <small>Enter the receipt/reference number shown after your GCash payment.</small>
+                            </div>
+
                         </div>
 
                     </div>
@@ -2262,6 +2339,133 @@ function toggleAccountMenu(button) {
                     );
                 }
             }
+        });
+
+    const isOpen =
+        menu.classList.toggle("open");
+
+    button.setAttribute(
+        "aria-expanded",
+        isOpen ? "true" : "false"
+    );
+}
+
+
+document.addEventListener(
+    "click",
+    function (event) {
+
+        document
+            .querySelectorAll(".account-menu.open")
+            .forEach(function (menu) {
+
+                if (!menu.contains(event.target)) {
+
+                    menu.classList.remove("open");
+
+                    const trigger =
+                        menu.querySelector(
+                            ".account-trigger"
+                        );
+
+                    if (trigger) {
+                        trigger.setAttribute(
+                            "aria-expanded",
+                            "false"
+                        );
+                    }
+                }
+            });
+    }
+);
+
+
+document.addEventListener(
+    "keydown",
+    function (event) {
+
+        if (event.key === "Escape") {
+
+            document
+                .querySelectorAll(".account-menu.open")
+                .forEach(function (menu) {
+
+                    menu.classList.remove("open");
+
+                    const trigger =
+                        menu.querySelector(
+                            ".account-trigger"
+                        );
+
+                    if (trigger) {
+                        trigger.setAttribute(
+                            "aria-expanded",
+                            "false"
+                        );
+                    }
+                });
+        }
+    }
+);
+
+
+const paymentInputs = document.querySelectorAll('input[name="payment_method"]');
+const gcashReceiptField = document.getElementById("gcashReceiptField");
+const gcashReceiptInput = document.getElementById("gcash_receipt");
+
+function updateGcashReceiptField() {
+    const selected = document.querySelector('input[name="payment_method"]:checked');
+    const isGcash = selected && selected.value === "GCash";
+
+    if (gcashReceiptField) {
+        gcashReceiptField.style.display = isGcash ? "block" : "none";
+    }
+
+    if (gcashReceiptInput) {
+        gcashReceiptInput.required = !!isGcash;
+        if (!isGcash) gcashReceiptInput.value = "";
+    }
+}
+
+paymentInputs.forEach(function(input) {
+    input.addEventListener("change", updateGcashReceiptField);
+});
+
+updateGcashReceiptField();
+
+/* =========================================================
+   PREVENT DOUBLE SUBMISSION
+========================================================= */
+
+const checkoutForm =
+    document.getElementById("checkoutForm");
+
+const placeOrderBtn =
+    document.getElementById("placeOrderBtn");
+
+if (checkoutForm && placeOrderBtn) {
+
+    checkoutForm.addEventListener(
+        "submit",
+        function () {
+
+            placeOrderBtn.disabled = true;
+
+            placeOrderBtn.style.opacity = ".72";
+            placeOrderBtn.style.cursor = "wait";
+
+            placeOrderBtn.textContent =
+                "Placing Order...";
+
+        }
+    );
+}
+
+</script>
+
+</body>
+</html>
+     }
         });
 
     const isOpen =

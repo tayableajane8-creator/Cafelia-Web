@@ -4,76 +4,112 @@ session_start();
 
 require_once "config/database.php";
 
-// Require a logged-in customer.
+
+// ==========================================
+// CHECK CUSTOMER LOGIN
+// ==========================================
+
 if (!isset($_SESSION["user_id"])) {
+
     header("Location: login.php");
     exit();
+
 }
 
 $user_id = (int) $_SESSION["user_id"];
+
+
+// ==========================================
+// CART RULES
+// ==========================================
+
+const MAX_ORDER_QUANTITY = 6;
+
+$cart_message = "";
+$cart_message_type = "";
 
 // ==========================================
 // ADD TO CART
 // ==========================================
 
-if ($_SERVER["REQUEST_METHOD"] === "GET" && ($_GET["action"] ?? "") === "add") {
+$is_add_request =
+    ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["action"] ?? "") === "add") ||
+    ($_SERVER["REQUEST_METHOD"] === "GET" && ($_GET["action"] ?? "") === "add");
 
-    $product_id = (int) ($_GET["product_id"] ?? 0);
-    $quantity = (int) ($_GET["quantity"] ?? 1);
+if ($is_add_request) {
 
-    if ($quantity < 1) {
-        $quantity = 1;
-    }
+    $product_id = (int) ($_POST["product_id"] ?? $_GET["product_id"] ?? 0);
+    $quantity = (int) ($_POST["quantity"] ?? $_GET["quantity"] ?? 1);
+    $quantity = max(1, min($quantity, MAX_ORDER_QUANTITY));
 
     if ($product_id > 0) {
-
         $stmt = $conn->prepare(
-            "SELECT id
+            "SELECT id, stock
              FROM products
              WHERE id = ?
-             AND status = 'available'
+               AND status = 'available'
              LIMIT 1"
         );
-        $stmt->bind_param("i", $product_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $product_exists = $result->num_rows === 1;
-        $stmt->close();
 
-        if ($product_exists) {
-
-            $stmt = $conn->prepare(
-                "SELECT id, quantity
-                 FROM cart
-                 WHERE user_id = ?
-                 AND product_id = ?
-                 LIMIT 1"
-            );
-            $stmt->bind_param("ii", $user_id, $product_id);
+        if ($stmt) {
+            $stmt->bind_param("i", $product_id);
             $stmt->execute();
-            $existing = $stmt->get_result()->fetch_assoc();
+            $result = $stmt->get_result();
+            $product = $result->fetch_assoc();
             $stmt->close();
 
-            if ($existing) {
-                $new_quantity = (int) $existing["quantity"] + $quantity;
+            if ($product) {
+                $stock = max(0, (int) $product["stock"]);
 
                 $stmt = $conn->prepare(
-                    "UPDATE cart
-                     SET quantity = ?
-                     WHERE id = ?
-                     AND user_id = ?"
+                    "SELECT id, quantity
+                     FROM cart
+                     WHERE user_id = ?
+                       AND product_id = ?
+                     LIMIT 1"
                 );
-                $stmt->bind_param("iii", $new_quantity, $existing["id"], $user_id);
-                $stmt->execute();
-                $stmt->close();
-            } else {
-                $stmt = $conn->prepare(
-                    "INSERT INTO cart (user_id, product_id, quantity)
-                     VALUES (?, ?, ?)"
-                );
-                $stmt->bind_param("iii", $user_id, $product_id, $quantity);
-                $stmt->execute();
-                $stmt->close();
+
+                if ($stmt) {
+                    $stmt->bind_param("ii", $user_id, $product_id);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    $existing = $result->fetch_assoc();
+                    $stmt->close();
+
+                    $current_quantity = $existing ? (int) $existing["quantity"] : 0;
+                    $allowed_max = min(MAX_ORDER_QUANTITY, $stock);
+                    $new_quantity = $current_quantity + $quantity;
+
+                    if ($stock <= 0) {
+                        header("Location: cart.php?cart_error=out_of_stock");
+                        exit();
+                    }
+
+                    if ($new_quantity > $allowed_max) {
+                        header("Location: cart.php?cart_error=limit&max=" . $allowed_max);
+                        exit();
+                    }
+
+                    if ($existing) {
+                        $stmt = $conn->prepare(
+                            "UPDATE cart SET quantity = ? WHERE id = ? AND user_id = ?"
+                        );
+                        if ($stmt) {
+                            $stmt->bind_param("iii", $new_quantity, $existing["id"], $user_id);
+                            $stmt->execute();
+                            $stmt->close();
+                        }
+                    } else {
+                        $stmt = $conn->prepare(
+                            "INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)"
+                        );
+                        if ($stmt) {
+                            $stmt->bind_param("iii", $user_id, $product_id, $quantity);
+                            $stmt->execute();
+                            $stmt->close();
+                        }
+                    }
+                }
             }
         }
     }
@@ -91,33 +127,58 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["action"] ?? "") === "updat
     if (isset($_POST["quantities"]) && is_array($_POST["quantities"])) {
 
         foreach ($_POST["quantities"] as $product_id => $quantity) {
-
             $product_id = (int) $product_id;
             $quantity = (int) $quantity;
 
-            if ($product_id <= 0) {
+            if ($product_id <= 0) continue;
+
+            if ($quantity <= 0) {
+                $stmt = $conn->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("ii", $user_id, $product_id);
+                    $stmt->execute();
+                    $stmt->close();
+                }
                 continue;
             }
 
-            if ($quantity <= 0) {
-                $stmt = $conn->prepare(
-                    "DELETE FROM cart
-                     WHERE user_id = ?
-                     AND product_id = ?"
-                );
-                $stmt->bind_param("ii", $user_id, $product_id);
-            } else {
-                $stmt = $conn->prepare(
-                    "UPDATE cart
-                     SET quantity = ?
-                     WHERE user_id = ?
-                     AND product_id = ?"
-                );
-                $stmt->bind_param("iii", $quantity, $user_id, $product_id);
+            $stock_stmt = $conn->prepare("SELECT stock FROM products WHERE id = ? AND status = 'available' LIMIT 1");
+            if (!$stock_stmt) continue;
+
+            $stock_stmt->bind_param("i", $product_id);
+            $stock_stmt->execute();
+            $stock_result = $stock_stmt->get_result();
+            $stock_row = $stock_result->fetch_assoc();
+            $stock_stmt->close();
+
+            if (!$stock_row) {
+                $delete = $conn->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+                if ($delete) {
+                    $delete->bind_param("ii", $user_id, $product_id);
+                    $delete->execute();
+                    $delete->close();
+                }
+                continue;
             }
 
-            $stmt->execute();
-            $stmt->close();
+            $max_allowed = min(MAX_ORDER_QUANTITY, max(0, (int)$stock_row["stock"]));
+            $quantity = min($quantity, $max_allowed);
+
+            if ($quantity <= 0) {
+                $delete = $conn->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+                if ($delete) {
+                    $delete->bind_param("ii", $user_id, $product_id);
+                    $delete->execute();
+                    $delete->close();
+                }
+            } else {
+                $stmt = $conn->prepare("UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("iii", $quantity, $user_id, $product_id);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
         }
     }
 
@@ -134,14 +195,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["action"] ?? "") === "remov
     $product_id = (int) ($_POST["product_id"] ?? 0);
 
     if ($product_id > 0) {
-        $stmt = $conn->prepare(
-            "DELETE FROM cart
-             WHERE user_id = ?
-             AND product_id = ?"
-        );
-        $stmt->bind_param("ii", $user_id, $product_id);
-        $stmt->execute();
-        $stmt->close();
+        $stmt = $conn->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+        if ($stmt) {
+            $stmt->bind_param("ii", $user_id, $product_id);
+            $stmt->execute();
+            $stmt->close();
+        }
     }
 
     header("Location: cart.php");
@@ -157,20 +216,20 @@ $grand_total = 0;
 
 $stmt = $conn->prepare(
     "SELECT
-        products.id AS id,
         cart.id AS cart_id,
         cart.product_id,
         cart.quantity,
         products.name,
         products.description,
         products.price,
+        products.stock,
         products.image,
         products.category
      FROM cart
      INNER JOIN products
         ON cart.product_id = products.id
      WHERE cart.user_id = ?
-       AND products.status = 'available'
+     AND products.status = 'available'
      ORDER BY cart.id DESC"
 );
 
@@ -186,6 +245,7 @@ while ($product = $result->fetch_assoc()) {
 
     $grand_total += $product["subtotal"];
     $cart_products[] = $product;
+
 }
 
 $stmt->close();
@@ -576,6 +636,27 @@ a{text-decoration:none}
 .cart-details p{
     margin-top:7px;color:var(--muted);font-size:12px;
 }
+
+.stock-available{
+    display:block;
+    margin-top:6px;
+    color:#9a806c;
+    font-size:10px;
+    font-weight:700;
+}
+
+.cart-alert{
+    width:min(calc(100% - 48px),1100px);
+    margin:20px auto 0;
+    padding:13px 16px;
+    border:1px solid #ead2b4;
+    border-radius:12px;
+    background:#fff6e8;
+    color:#8c5e2c;
+    font-size:12px;
+    font-weight:700;
+}
+
 
 .quantity-label{
     display:block;margin-bottom:7px;color:var(--muted);
@@ -984,6 +1065,16 @@ a{text-decoration:none}
 </section>
 
 
+<?php if (isset($_GET["cart_error"])): ?>
+    <div class="cart-alert">
+        <?php if ($_GET["cart_error"] === "limit"): ?>
+            You can order up to <?php echo MAX_ORDER_QUANTITY; ?> of one product, and never more than the available stock.
+        <?php elseif ($_GET["cart_error"] === "out_of_stock"): ?>
+            Sorry, this product is currently out of stock.
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
 <section class="cart-section">
 
 <?php if (!empty($cart_products)): ?>
@@ -1018,7 +1109,7 @@ a{text-decoration:none}
 
                     <?php
                         $cart_image = !empty($product["image"])
-                            ? basename(str_replace("\\", "/", $product["image"]))
+                            ? basename($product["image"])
                             : "";
                     ?>
 
@@ -1050,6 +1141,10 @@ a{text-decoration:none}
                                 ₱<?php echo number_format($product["price"], 2); ?> each
                             </p>
 
+                            <small class="stock-available">
+                                <?php echo (int)$product["stock"]; ?> available · max <?php echo MAX_ORDER_QUANTITY; ?> per product
+                            </small>
+
                         </div>
 
 
@@ -1062,22 +1157,24 @@ a{text-decoration:none}
                                 <button
                                     type="button"
                                     aria-label="Decrease quantity"
-                                    onclick="changeQuantity(<?php echo (int) $product['id']; ?>,-1)"
+                                    onclick="changeQuantity(<?php echo (int) $product['product_id']; ?>,-1,<?php echo min(MAX_ORDER_QUANTITY, (int)$product['stock']); ?>)"
                                 >−</button>
 
                                 <input
                                     type="number"
-                                    id="quantity-<?php echo (int) $product['id']; ?>"
-                                    name="quantities[<?php echo (int) $product['id']; ?>]"
+                                    id="quantity-<?php echo (int) $product['product_id']; ?>"
+                                    name="quantities[<?php echo (int) $product['product_id']; ?>]"
                                     value="<?php echo (int) $product["quantity"]; ?>"
                                     min="1"
+                                    max="<?php echo min(MAX_ORDER_QUANTITY, (int)$product["stock"]); ?>"
+                                    oninput="validateQuantityInput(this)"
                                     aria-label="Quantity"
                                 >
 
                                 <button
                                     type="button"
                                     aria-label="Increase quantity"
-                                    onclick="changeQuantity(<?php echo (int) $product['id']; ?>,1)"
+                                    onclick="changeQuantity(<?php echo (int) $product['product_id']; ?>,1,<?php echo min(MAX_ORDER_QUANTITY, (int)$product['stock']); ?>)"
                                 >+</button>
 
                             </div>
@@ -1089,7 +1186,7 @@ a{text-decoration:none}
 
                             <span>Subtotal</span>
 
-                            <strong>
+                            <strong class="item-subtotal-value" data-price="<?php echo htmlspecialchars((string)$product["price"], ENT_QUOTES); ?>">
                                 ₱<?php echo number_format($product["subtotal"], 2); ?>
                             </strong>
 
@@ -1112,7 +1209,7 @@ a{text-decoration:none}
                             <input
                                 type="hidden"
                                 name="product_id"
-                                value="<?php echo (int) $product["id"]; ?>"
+                                value="<?php echo (int) $product["product_id"]; ?>"
                             >
                         </button>
 
@@ -1143,7 +1240,7 @@ a{text-decoration:none}
 
             <div class="summary-row">
                 <span>Subtotal</span>
-                <strong>₱<?php echo number_format($grand_total, 2); ?></strong>
+                <strong id="cartSubtotal">₱<?php echo number_format($grand_total, 2); ?></strong>
             </div>
 
             <div class="summary-row">
@@ -1155,7 +1252,7 @@ a{text-decoration:none}
 
             <div class="summary-total">
                 <span>Total</span>
-                <strong>₱<?php echo number_format($grand_total, 2); ?></strong>
+                <strong id="cartTotal">₱<?php echo number_format($grand_total, 2); ?></strong>
             </div>
 
             <a href="checkout.php" class="checkout-button">
@@ -1242,6 +1339,8 @@ a{text-decoration:none}
 
 
 <script>
+const MAX_ORDER_QUANTITY = <?php echo MAX_ORDER_QUANTITY; ?>;
+
 function toggleAccountMenu(button) {
     const menu = button.closest(".account-menu");
     const isOpen = menu.classList.toggle("open");
@@ -1282,24 +1381,48 @@ document.addEventListener("keydown", function(event) {
     }
 });
 
-function changeQuantity(productId, amount) {
-
-    const input = document.getElementById(
-        "quantity-" + productId
-    );
-
+function changeQuantity(productId, amount, maxStock) {
+    const input = document.getElementById("quantity-" + productId);
     if (!input) return;
 
     let quantity = parseInt(input.value, 10) || 1;
+    const max = Math.max(1, Math.min(MAX_ORDER_QUANTITY, parseInt(maxStock, 10) || 1));
 
     quantity += amount;
-
-    if (quantity < 1) {
-        quantity = 1;
-    }
-
+    quantity = Math.max(1, Math.min(quantity, max));
     input.value = quantity;
+    updateCartPreview();
 }
+
+function validateQuantityInput(input) {
+    const max = Math.max(1, Math.min(MAX_ORDER_QUANTITY, parseInt(input.max, 10) || 1));
+    let quantity = parseInt(input.value, 10) || 1;
+    quantity = Math.max(1, Math.min(quantity, max));
+    input.value = quantity;
+    updateCartPreview();
+}
+
+function updateCartPreview() {
+    let total = 0;
+    document.querySelectorAll(".cart-item").forEach(function(item) {
+        const input = item.querySelector('input[name^="quantities["]');
+        const subtotal = item.querySelector(".item-subtotal-value");
+        if (!input || !subtotal) return;
+        const price = parseFloat(subtotal.dataset.price) || 0;
+        const quantity = parseInt(input.value, 10) || 1;
+        const line = price * quantity;
+        total += line;
+        subtotal.textContent = "₱" + line.toLocaleString("en-PH", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    });
+
+    const subtotalEl = document.getElementById("cartSubtotal");
+    const totalEl = document.getElementById("cartTotal");
+    const formatted = "₱" + total.toLocaleString("en-PH", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (subtotalEl) subtotalEl.textContent = formatted;
+    if (totalEl) totalEl.textContent = formatted;
+}
+
+document.addEventListener("DOMContentLoaded", updateCartPreview);
 
 function prepareRemove(button) {
 

@@ -11,6 +11,10 @@ function e($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
 }
 
+// Admin may add 1 to 5 stocks per replenishment.
+$MIN_ADD = 1;
+$MAX_ADD = 5;
+
 $product_id = (int)($_GET["id"] ?? $_POST["product_id"] ?? 0);
 if ($product_id <= 0) {
     header("Location: products.php");
@@ -34,20 +38,23 @@ $error = "";
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $add_quantity = (int)($_POST["add_quantity"] ?? 0);
 
-    if ($current_stock !== 0) {
-        $error = "Stock can only be added when the current stock is 0.";
-    } elseif ($add_quantity !== 5) {
-        $error = "You can only add exactly 5 stocks.";
+    if ($add_quantity < $MIN_ADD || $add_quantity > $MAX_ADD) {
+        $error = "You can add a minimum of 1 and a maximum of 5 stocks.";
     } else {
-        /* Add stock and reactivate an out-of-stock product. */
+        /*
+         * Add the selected quantity to the CURRENT stock.
+         * This works whether current stock is 0, 1, 2, 3, 4, or 5.
+         * If the product was out of stock, it is automatically reactivated.
+         */
         $update = $conn->prepare(
             "UPDATE products
-             SET stock = 5, status = 'available'
-             WHERE id = ? AND stock = 0"
+             SET stock = stock + ?,
+                 status = 'available'
+             WHERE id = ?"
         );
 
         if ($update) {
-            $update->bind_param("i", $product_id);
+            $update->bind_param("ii", $add_quantity, $product_id);
 
             if ($update->execute()) {
                 if ($update->affected_rows > 0) {
@@ -56,14 +63,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     exit();
                 }
 
-                $error = "Stock was not added. The product must still have 0 stock.";
+                $error = "Stock was not added. Please try again.";
             } else {
-                $error = "Unable to update the product stock.";
+                $error = "Unable to update the product stock: " . $update->error;
             }
 
             $update->close();
         } else {
-            $error = "Unable to prepare the stock update.";
+            $error = "Unable to prepare the stock update: " . $conn->error;
         }
     }
 }
@@ -123,19 +130,36 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <form method="POST" class="form">
             <input type="hidden" name="product_id" value="<?php echo $product_id; ?>">
             <h2 class="form-title">Inventory Replenishment</h2>
-            <p class="form-description">This product is out of stock. You can replenish it with exactly 5 stocks only.</p>
+            <p class="form-description">Enter how many units you want to add. If this product is out of stock, adding inventory will automatically make it available again.</p>
             <?php if ($error !== ""): ?><div class="error"><?php echo e($error); ?></div><?php endif; ?>
             <label for="add_quantity">Number of Stock to Add</label>
-            <input type="number" id="add_quantity" name="add_quantity" min="5" max="5" step="1" value="5" required autofocus <?php echo $current_stock !== 0 ? "disabled" : ""; ?>>
-            <span class="hint">Only exactly 5 stocks can be added, and only when current stock is 0.</span>
+            <input type="number" id="add_quantity" name="add_quantity" min="1" max="5" step="1" value="1" required autofocus>
+            <span class="hint">You can add 1 to 5 stocks at a time.</span>
             <div class="result-preview" id="resultPreview" style="display:none"></div>
-            <div class="actions"><a href="products.php" class="btn btn-secondary">Cancel</a><button type="submit" class="btn btn-primary" <?php echo $current_stock !== 0 ? "disabled" : ""; ?>>＋ Add 5 Stock</button></div>
+            <div class="actions"><a href="products.php" class="btn btn-secondary">Cancel</a><button type="submit" class="btn btn-primary" id="addStockButton">＋ Add Stock</button></div>
         </form>
     </section>
 </main>
 <script>
 const input=document.getElementById("add_quantity"), preview=document.getElementById("resultPreview"), currentStock=<?php echo $current_stock; ?>;
-function updatePreview(){const q=Number(input.value||0);if(q>0){preview.textContent="New stock after adding: "+(currentStock+q)+" unit(s)";preview.style.display="block";}else preview.style.display="none";}
+function updatePreview(){
+    let q = Number(input.value || 0);
+    if (q < 1) q = 0;
+    if (q > 5) q = 5;
+    if (q > 0) {
+        preview.textContent = "New stock after adding: " + (currentStock + q) + " unit(s)";
+        preview.style.display = "block";
+    } else {
+        preview.style.display = "none";
+    }
+}
+input.addEventListener("input", updatePreview);
+input.addEventListener("change", function(){
+    let q = Number(this.value || 0);
+    if (q < 1) this.value = 1;
+    if (q > 5) this.value = 5;
+    updatePreview();
+});
 input.addEventListener("input",updatePreview); updatePreview();
 </script>
 </body>

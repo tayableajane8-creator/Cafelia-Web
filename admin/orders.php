@@ -503,7 +503,7 @@ $locked_message = isset($_GET["locked"]);
 
         table {
             width: 100%;
-            min-width: 1080px;
+            min-width: 1320px;
             border-collapse: collapse;
         }
 
@@ -590,6 +590,82 @@ $locked_message = isset($_GET["locked"]);
             font-size: 13px;
             font-weight: 800;
             white-space: nowrap;
+        }
+
+        /* ORDERED ITEMS */
+        .items-cell {
+            min-width: 300px;
+        }
+
+        .ordered-items {
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .ordered-item {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .ordered-item-image,
+        .ordered-item-placeholder {
+            width: 42px;
+            height: 42px;
+            flex: 0 0 42px;
+            border-radius: 9px;
+        }
+
+        .ordered-item-image {
+            object-fit: cover;
+            border: 1px solid var(--border);
+            background: var(--cream);
+        }
+
+        .ordered-item-placeholder {
+            display: grid;
+            place-items: center;
+            background: var(--cream);
+            color: var(--coffee);
+            font-size: 15px;
+        }
+
+        .ordered-item-info {
+            min-width: 0;
+        }
+
+        .ordered-item-name {
+            color: var(--espresso);
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.3;
+        }
+
+        .ordered-item-meta {
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 10px;
+            line-height: 1.3;
+        }
+
+        .qty-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 5px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: #f2e8dc;
+            color: var(--coffee);
+            font-size: 9px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .items-empty {
+            color: var(--muted);
+            font-size: 10px;
         }
 
         .date {
@@ -1123,6 +1199,10 @@ include "sidebar.php";
                             </th>
 
                             <th>
+                                Ordered Items
+                            </th>
+
+                            <th>
                                 Total
                             </th>
 
@@ -1235,6 +1315,145 @@ include "sidebar.php";
                                     </div>
 
                                 </div>
+
+                            </td>
+
+
+                            <!-- ORDERED ITEMS -->
+
+                            <td class="items-cell">
+
+                                <?php
+                                $item_stmt = $conn->prepare(
+                                    "SELECT
+                                        oi.product_name,
+                                        oi.quantity,
+                                        oi.price,
+                                        oi.subtotal,
+                                        p.image
+                                     FROM order_items AS oi
+                                     LEFT JOIN products AS p
+                                        ON p.id = oi.product_id
+                                     WHERE oi.order_id = ?
+                                     ORDER BY oi.id ASC"
+                                );
+
+                                $order_items = [];
+
+                                if ($item_stmt) {
+
+                                    $item_stmt->bind_param(
+                                        "i",
+                                        $order["id"]
+                                    );
+
+                                    if ($item_stmt->execute()) {
+
+                                        $item_result =
+                                            $item_stmt->get_result();
+
+                                        while (
+                                            $item_row =
+                                            $item_result->fetch_assoc()
+                                        ) {
+                                            $order_items[] = $item_row;
+                                        }
+                                    }
+
+                                    $item_stmt->close();
+                                }
+                                ?>
+
+                                <?php if (!empty($order_items)): ?>
+
+                                    <div class="ordered-items">
+
+                                        <?php foreach ($order_items as $item): ?>
+
+                                            <?php
+                                            $item_image = trim(
+                                                (string)($item["image"] ?? "")
+                                            );
+                                            ?>
+
+                                            <div class="ordered-item">
+
+                                                <?php if ($item_image !== ""): ?>
+
+                                                    <img
+                                                        src="../image/<?php echo e($item_image); ?>"
+                                                        alt="<?php echo e($item["product_name"]); ?>"
+                                                        class="ordered-item-image"
+                                                        onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"
+                                                    >
+
+                                                    <div
+                                                        class="ordered-item-placeholder"
+                                                        style="display:none;"
+                                                    >
+                                                        ☕
+                                                    </div>
+
+                                                <?php else: ?>
+
+                                                    <div class="ordered-item-placeholder">
+                                                        ☕
+                                                    </div>
+
+                                                <?php endif; ?>
+
+                                                <div class="ordered-item-info">
+
+                                                    <div class="ordered-item-name">
+
+                                                        <?php
+                                                        echo e(
+                                                            $item["product_name"]
+                                                        );
+                                                        ?>
+
+                                                        <span class="qty-badge">
+                                                            Qty:
+                                                            <?php
+                                                            echo (int)$item["quantity"];
+                                                            ?>
+                                                        </span>
+
+                                                    </div>
+
+                                                    <div class="ordered-item-meta">
+
+                                                        ₱<?php
+                                                        echo number_format(
+                                                            (float)$item["price"],
+                                                            2
+                                                        );
+                                                        ?>
+                                                        each
+                                                        · Subtotal ₱<?php
+                                                        echo number_format(
+                                                            (float)$item["subtotal"],
+                                                            2
+                                                        );
+                                                        ?>
+
+                                                    </div>
+
+                                                </div>
+
+                                            </div>
+
+                                        <?php endforeach; ?>
+
+                                    </div>
+
+                                <?php else: ?>
+
+                                    <div class="items-empty">
+                                        No order items found.
+                                    </div>
+
+                                <?php endif; ?>
 
                             </td>
 

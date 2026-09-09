@@ -4,8 +4,8 @@ session_start();
 require_once "config/database.php";
 
 /* =========================================================
-   CUSTOMER ACCESS
-========================================================= */
+   CAFELIA CHECKOUT - UPGRADED / DATABASE-SAFE VERSION
+   ========================================================= */
 
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
@@ -15,19 +15,84 @@ if (!isset($_SESSION["user_id"])) {
 $user_id = (int) $_SESSION["user_id"];
 
 $error = "";
+
 $old = [
-    "customer_name" => "",
+    "customer_name"  => "",
     "customer_email" => "",
-    "phone" => "",
-    "address" => "",
+    "phone"          => "",
+    "address"        => "",
     "payment_method" => "",
-    "gcash_receipt" => ""
+    "gcash_receipt"  => "",
+    "payment_status" => "Pending"
 ];
 
 /* =========================================================
-   DATABASE HELPERS
-========================================================= */
+   HELPERS
+   ========================================================= */
 
+function e(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, "UTF-8");
+}
+
+/**
+ * Check whether a table contains a column.
+ * This makes checkout tolerant of the Cafelia database versions
+ * that used gcash_receipt or gcash_reference.
+ */
+function tableHasColumn(mysqli $conn, string $table, string $column): bool
+{
+    $allowedTables = ["orders", "order_items", "products", "cart", "users"];
+
+    if (!in_array($table, $allowedTables, true)) {
+        return false;
+    }
+
+    $stmt = $conn->prepare(
+        "SELECT COUNT(*)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?"
+    );
+
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param("ss", $table, $column);
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+    $row = $result->fetch_row();
+
+    $stmt->close();
+
+    return ((int)($row[0] ?? 0)) > 0;
+}
+
+/**
+ * Return the first existing column from a list.
+ */
+function firstExistingColumn(
+    mysqli $conn,
+    string $table,
+    array $columns
+): ?string {
+    foreach ($columns as $column) {
+        if (tableHasColumn($conn, $table, $column)) {
+            return $column;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Load the customer's database cart.
+ * The cart is always read from the logged-in user's database rows,
+ * never from an old PHP session cart.
+ */
 function getCartProducts(mysqli $conn, int $user_id): array
 {
     $products = [];
@@ -35,7 +100,7 @@ function getCartProducts(mysqli $conn, int $user_id): array
     $sql = "
         SELECT
             c.product_id,
-            c.quantity,
+            SUM(c.quantity) AS quantity,
             p.name,
             p.price,
             p.stock
@@ -43,31 +108,45 @@ function getCartProducts(mysqli $conn, int $user_id): array
         INNER JOIN products AS p
             ON p.id = c.product_id
         WHERE c.user_id = ?
-          AND p.status = 'available'
+          AND LOWER(p.status) = 'available'
           AND c.quantity > 0
-        ORDER BY c.id ASC
+        GROUP BY
+            c.product_id,
+            p.id,
+            p.name,
+            p.price,
+            p.stock
+        ORDER BY MIN(c.id) ASC
     ";
 
     $stmt = $conn->prepare($sql);
 
     if (!$stmt) {
-        throw new Exception("Unable to load the cart.");
+        throw new Exception(
+            "Unable to load the cart: " . $conn->error
+        );
     }
 
     $stmt->bind_param("i", $user_id);
 
     if (!$stmt->execute()) {
+        $message = $stmt->error;
         $stmt->close();
-        throw new Exception("Unable to load the cart.");
+
+        throw new Exception(
+            "Unable to load the cart: " . $message
+        );
     }
 
     $result = $stmt->get_result();
 
     while ($row = $result->fetch_assoc()) {
         $row["product_id"] = (int) $row["product_id"];
-        $row["quantity"] = (int) $row["quantity"];
-        $row["price"] = (float) $row["price"];
-        $row["subtotal"] = $row["price"] * $row["quantity"];
+        $row["quantity"]   = (int) $row["quantity"];
+        $row["price"]      = (float) $row["price"];
+        $row["stock"]      = (int) ($row["stock"] ?? 0);
+        $row["subtotal"]   =
+            $row["price"] * $row["quantity"];
 
         $products[] = $row;
     }
@@ -100,14 +179,360 @@ function getCartCount(mysqli $conn, int $user_id): int
     return (int) ($row["cart_count"] ?? 0);
 }
 
-function e(string $value): string
-{
-    return htmlspecialchars($value, ENT_QUOTES, "UTF-8");
+/**
+ * Build a dynamic INSERT statement for orders.
+ *
+ * Your Cafelia files have used both:
+ *   gcash_receipt
+ * and:
+ *   gcash_reference
+ *
+ * This version detects the real column in the active database.
+ */
+function createOrder(
+    mysqli $conn,
+    int $user_id,
+    array $old,
+    float $grand_total,
+    string $status
+): int {
+    $columns = [];
+    $values  = [];
+    $types   = "";
+    $params  = [];
+
+    if (tableHasColumn($conn, "orders", "user_id")) {
+        $columns[] = "user_id";
+        $values[]  = "?";
+        $types    .= "i";
+        $params[]  = $user_id;
+    }
+
+    $required = [
+        "customer_name"  => ["s", $old["customer_name"]],
+        "customer_email" => ["s", $old["customer_email"]],
+        "phone"          => ["s", $old["phone"]],
+        "address"        => ["s", $old["address"]]
+    ];
+
+    foreach ($required as $column => $data) {
+        if (tableHasColumn($conn, "orders", $column)) {
+            $columns[] = $column;
+            $values[]  = "?";
+            $types    .= $data[0];
+            $params[]  = $data[1];
+        }
+    }
+
+    $totalColumn = firstExistingColumn(
+        $conn,
+        "orders",
+        ["total_amount", "total", "grand_total"]
+    );
+
+    if ($totalColumn === null) {
+        throw new Exception(
+            "The orders table has no total_amount/total column."
+        );
+    }
+
+    $columns[] = $totalColumn;
+    $values[]  = "?";
+    $types    .= "d";
+    $params[]  = $grand_total;
+
+    if (tableHasColumn($conn, "orders", "payment_method")) {
+        $columns[] = "payment_method";
+        $values[]  = "?";
+        $types    .= "s";
+        $params[]  = $old["payment_method"];
+    }
+
+    $referenceColumn = firstExistingColumn(
+        $conn,
+        "orders",
+        ["gcash_reference", "gcash_receipt", "reference_number"]
+    );
+
+    if ($referenceColumn !== null) {
+        $columns[] = $referenceColumn;
+        $values[]  = "?";
+        $types    .= "s";
+        $params[]  = (
+            $old["payment_method"] === "GCash"
+                ? $old["gcash_receipt"]
+                : ""
+        );
+    }
+
+    if (tableHasColumn($conn, "orders", "payment_status")) {
+        $columns[] = "payment_status";
+        $values[]  = "?";
+        $types    .= "s";
+        $params[]  = $old["payment_status"];
+    }
+
+    if (tableHasColumn($conn, "orders", "status")) {
+        $columns[] = "status";
+        $values[]  = "?";
+        $types    .= "s";
+        $params[]  = $status;
+    }
+
+    $sql =
+        "INSERT INTO orders (" .
+        implode(", ", $columns) .
+        ") VALUES (" .
+        implode(", ", $values) .
+        ")";
+
+    $stmt = $conn->prepare($sql);
+
+    if (!$stmt) {
+        throw new Exception(
+            "Unable to prepare the order: " . $conn->error
+        );
+    }
+
+    $bind = [$types];
+
+    foreach ($params as $key => $value) {
+        $bind[] = &$params[$key];
+    }
+
+    if (!call_user_func_array([$stmt, "bind_param"], $bind)) {
+        $message = $stmt->error;
+        $stmt->close();
+
+        throw new Exception(
+            "Unable to bind the order data: " . $message
+        );
+    }
+
+    if (!$stmt->execute()) {
+        $message = $stmt->error;
+        $stmt->close();
+
+        throw new Exception(
+            "Order insert failed: " . $message
+        );
+    }
+
+    $order_id = (int) $conn->insert_id;
+
+    $stmt->close();
+
+    if ($order_id <= 0) {
+        throw new Exception(
+            "The order ID could not be created."
+        );
+    }
+
+    return $order_id;
+}
+
+/**
+ * Save one order item while supporting the current product naming
+ * used by Cafelia.
+ */
+function createOrderItems(
+    mysqli $conn,
+    int $order_id,
+    array $cart_products
+): void {
+    $productIdColumn = firstExistingColumn(
+        $conn,
+        "order_items",
+        ["product_id", "productid", "product"]
+    );
+
+    $productNameColumn = firstExistingColumn(
+        $conn,
+        "order_items",
+        ["product_name", "name"]
+    );
+
+    if ($productIdColumn === null) {
+        throw new Exception(
+            "The order_items table has no product_id column."
+        );
+    }
+
+    if ($productNameColumn === null) {
+        throw new Exception(
+            "The order_items table has no product_name column."
+        );
+    }
+
+    $columns = [
+        "order_id",
+        $productIdColumn,
+        $productNameColumn
+    ];
+
+    $values = ["?", "?", "?"];
+    $types  = "i i s";
+    $types  = str_replace(" ", "", $types);
+
+    $columns[] = "price";
+    $values[]  = "?";
+    $types    .= "d";
+
+    $columns[] = "quantity";
+    $values[]  = "?";
+    $types    .= "i";
+
+    $columns[] = "subtotal";
+    $values[]  = "?";
+    $types    .= "d";
+
+    $sql =
+        "INSERT INTO order_items (" .
+        implode(", ", $columns) .
+        ") VALUES (" .
+        implode(", ", $values) .
+        ")";
+
+    $stmt = $conn->prepare($sql);
+
+    if (!$stmt) {
+        throw new Exception(
+            "Unable to prepare order items: " . $conn->error
+        );
+    }
+
+    foreach ($cart_products as $product) {
+        $product_id   = (int) $product["product_id"];
+        $product_name = (string) $product["name"];
+        $price        = (float) $product["price"];
+        $quantity     = (int) $product["quantity"];
+        $subtotal     = (float) $product["subtotal"];
+
+        if ($product_id <= 0 || $quantity <= 0) {
+            $stmt->close();
+
+            throw new Exception(
+                "Invalid product or quantity in cart."
+            );
+        }
+
+        $stmt->bind_param(
+            $types,
+            $order_id,
+            $product_id,
+            $product_name,
+            $price,
+            $quantity,
+            $subtotal
+        );
+
+        if (!$stmt->execute()) {
+            $message = $stmt->error;
+            $stmt->close();
+
+            throw new Exception(
+                "Order item insert failed: " . $message
+            );
+        }
+    }
+
+    $stmt->close();
+}
+
+/**
+ * Deduct stock only after the order and order items are ready.
+ */
+function reduceStock(
+    mysqli $conn,
+    array $cart_products
+): void {
+    $stmt = $conn->prepare(
+        "UPDATE products
+         SET stock = stock - ?
+         WHERE id = ?
+           AND stock >= ?"
+    );
+
+    if (!$stmt) {
+        throw new Exception(
+            "Unable to prepare stock update: " . $conn->error
+        );
+    }
+
+    foreach ($cart_products as $product) {
+        $product_id = (int) $product["product_id"];
+        $quantity   = (int) $product["quantity"];
+
+        $stmt->bind_param(
+            "iii",
+            $quantity,
+            $product_id,
+            $quantity
+        );
+
+        if (!$stmt->execute()) {
+            $message = $stmt->error;
+            $stmt->close();
+
+            throw new Exception(
+                "Stock update failed: " . $message
+            );
+        }
+
+        if ($stmt->affected_rows !== 1) {
+            $stmt->close();
+
+            throw new Exception(
+                "Not enough stock available for " .
+                (string) $product["name"] . "."
+            );
+        }
+    }
+
+    $stmt->close();
+
+    /* Mark sold-out products unavailable if the column exists. */
+    if (tableHasColumn($conn, "products", "status")) {
+        $conn->query(
+            "UPDATE products
+             SET status = 'unavailable'
+             WHERE stock <= 0"
+        );
+    }
+}
+
+function clearUserCart(
+    mysqli $conn,
+    int $user_id
+): void {
+    $stmt = $conn->prepare(
+        "DELETE FROM cart
+         WHERE user_id = ?"
+    );
+
+    if (!$stmt) {
+        throw new Exception(
+            "Unable to prepare cart cleanup: " . $conn->error
+        );
+    }
+
+    $stmt->bind_param("i", $user_id);
+
+    if (!$stmt->execute()) {
+        $message = $stmt->error;
+        $stmt->close();
+
+        throw new Exception(
+            "Cart cleanup failed: " . $message
+        );
+    }
+
+    $stmt->close();
 }
 
 /* =========================================================
    GET CUSTOMER
-========================================================= */
+   ========================================================= */
 
 $stmt = $conn->prepare(
     "SELECT name, email
@@ -117,7 +542,7 @@ $stmt = $conn->prepare(
 );
 
 if (!$stmt) {
-    die("Database error. Please try again later.");
+    die("Database error: " . e($conn->error));
 }
 
 $stmt->bind_param("i", $user_id);
@@ -136,23 +561,25 @@ if (!$user) {
     exit();
 }
 
-/* =========================================================
-   INITIAL FORM VALUES
-========================================================= */
-
-$old["customer_name"] = (string) ($user["name"] ?? "");
+$old["customer_name"]  = (string) ($user["name"] ?? "");
 $old["customer_email"] = (string) ($user["email"] ?? "");
 
 /* =========================================================
-   LOAD CART
-========================================================= */
+   LOAD DATABASE CART
+   ========================================================= */
 
 try {
     $cart_products = getCartProducts($conn, $user_id);
-} catch (Exception $e) {
-    error_log("Cafelia checkout cart error: " . $e->getMessage());
+} catch (Throwable $e) {
+    error_log(
+        "Cafelia checkout cart error for user {$user_id}: " .
+        $e->getMessage()
+    );
+
     $cart_products = [];
-    $error = "We couldn't load your cart. Please return to your cart and try again.";
+    $error =
+        "We couldn't load your cart. " .
+        "Please return to your cart and try again.";
 }
 
 $grand_total = 0.00;
@@ -164,30 +591,49 @@ foreach ($cart_products as $product) {
 $cart_count = getCartCount($conn, $user_id);
 
 /* =========================================================
-   REDIRECT IF CART IS EMPTY
-========================================================= */
+   EMPTY CART
+   ========================================================= */
 
-if (empty($cart_products) && $_SERVER["REQUEST_METHOD"] !== "POST") {
+if (
+    empty($cart_products) &&
+    $_SERVER["REQUEST_METHOD"] !== "POST"
+) {
     header("Location: cart.php");
     exit();
 }
 
 /* =========================================================
    PLACE ORDER
-========================================================= */
+   ========================================================= */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    $old["customer_name"] = trim($_POST["customer_name"] ?? "");
-    $old["customer_email"] = trim($_POST["customer_email"] ?? "");
-    $old["phone"] = trim($_POST["phone"] ?? "");
-    $old["address"] = trim($_POST["address"] ?? "");
-    $old["payment_method"] = trim($_POST["payment_method"] ?? "");
-    $old["gcash_receipt"] = trim($_POST["gcash_receipt"] ?? "");
+    $old["customer_name"] =
+        trim($_POST["customer_name"] ?? "");
 
-    /* -------------------------
+    $old["customer_email"] =
+        trim($_POST["customer_email"] ?? "");
+
+    $old["phone"] =
+        trim($_POST["phone"] ?? "");
+
+    $old["address"] =
+        trim($_POST["address"] ?? "");
+
+    $old["payment_method"] =
+        trim($_POST["payment_method"] ?? "");
+
+    $old["gcash_receipt"] =
+        trim($_POST["gcash_receipt"] ?? "");
+
+    $old["payment_status"] =
+        $old["payment_method"] === "GCash"
+            ? "Pending Verification"
+            : "Pending";
+
+    /* ---------------------------------------------------------
        VALIDATION
-    ------------------------- */
+       --------------------------------------------------------- */
 
     if (
         $old["customer_name"] === "" ||
@@ -196,305 +642,186 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $old["address"] === "" ||
         $old["payment_method"] === ""
     ) {
-        $error = "Please complete all required checkout fields.";
 
-    } elseif (!filter_var($old["customer_email"], FILTER_VALIDATE_EMAIL)) {
-        $error = "Please enter a valid email address.";
+        $error =
+            "Please complete all required checkout fields.";
 
-    } elseif (strlen($old["customer_name"]) < 2) {
-        $error = "Please enter your complete name.";
+    } elseif (
+        !filter_var(
+            $old["customer_email"],
+            FILTER_VALIDATE_EMAIL
+        )
+    ) {
 
-    } elseif (!preg_match("/^[0-9+()\\-\\s]{7,20}$/", $old["phone"])) {
-        $error = "Please enter a valid phone number.";
+        $error =
+            "Please enter a valid email address.";
 
-    } elseif (!in_array(
-        $old["payment_method"],
-        ["Cash on Delivery", "GCash"],
-        true
-    )) {
-        $error = "Please select a valid payment method.";
+    } elseif (
+        strlen($old["customer_name"]) < 2
+    ) {
 
-    } elseif ($old["payment_method"] === "GCash" && !preg_match("/^[A-Za-z0-9\-]{5,100}$/", $old["gcash_receipt"])) {
-        $error = "Please enter a valid GCash receipt/reference number.";
+        $error =
+            "Please enter your complete name.";
+
+    } elseif (
+        !preg_match(
+            "/^[0-9+()\\-\\s]{7,20}$/",
+            $old["phone"]
+        )
+    ) {
+
+        $error =
+            "Please enter a valid phone number.";
+
+    } elseif (
+        !in_array(
+            $old["payment_method"],
+            ["Cash on Delivery", "GCash"],
+            true
+        )
+    ) {
+
+        $error =
+            "Please select a valid payment method.";
+
+    } elseif (
+        $old["payment_method"] === "GCash" &&
+        !preg_match(
+            "/^[0-9]{5,20}$/",
+            $old["gcash_receipt"]
+        )
+    ) {
+
+        $error =
+            "Please enter a valid GCash reference number.";
 
     } else {
 
         /*
-         * Re-read the cart immediately before checkout.
-         * This prevents an outdated checkout page from creating
-         * an order using old quantities.
+         * IMPORTANT:
+         * Re-read the database cart immediately before placing
+         * the order. This guarantees that the order uses the same
+         * items/quantities currently stored in cart.php.
          */
         try {
-            $cart_products = getCartProducts($conn, $user_id);
-        } catch (Exception $e) {
-            error_log("Cafelia checkout refresh error: " . $e->getMessage());
-            $cart_products = [];
-            $error = "We couldn't verify your cart. Please try again.";
-        }
 
-        $grand_total = 0.00;
+            $cart_products =
+                getCartProducts(
+                    $conn,
+                    $user_id
+                );
 
-        foreach ($cart_products as $product) {
-            $grand_total += (float) $product["subtotal"];
-        }
-
-        if (empty($cart_products)) {
-
-            $error = "Your cart is empty. Please add an item before checking out.";
-
-        } elseif ($grand_total <= 0) {
-
-            $error = "Your cart total is invalid. Please return to your cart.";
-
-        } else {
+            $grand_total = 0.00;
 
             foreach ($cart_products as $product) {
-                $quantity = (int) $product["quantity"];
-                $stock = (int) ($product["stock"] ?? 0);
+                $grand_total +=
+                    (float) $product["subtotal"];
+            }
 
-               
+            if (empty($cart_products)) {
+
+                throw new Exception(
+                    "Your cart is empty. " .
+                    "Please add an item before checking out."
+                );
+            }
+
+            if ($grand_total <= 0) {
+
+                throw new Exception(
+                    "Your cart total is invalid."
+                );
+            }
+
+            foreach ($cart_products as $product) {
+
+                $quantity =
+                    (int) $product["quantity"];
+
+                $stock =
+                    (int) ($product["stock"] ?? 0);
+
+                if (
+                    $quantity < 1 ||
+                    $quantity > 5
+                ) {
+                    throw new Exception(
+                        "You can order a maximum of " .
+                        "5 units per product."
+                    );
+                }
+
                 if ($quantity > $stock) {
-                    $error = "Not enough stock available for " . (string)$product["name"] . ". Please update your cart.";
-                    break;
+                    throw new Exception(
+                        "Not enough stock available for " .
+                        (string) $product["name"] .
+                        ". Please update your cart."
+                    );
                 }
             }
 
-        }
-
-        if ($error === "") {
+            /* -------------------------------------------------
+               TRANSACTION
+               ------------------------------------------------- */
 
             $transaction_started = false;
 
             try {
 
-                /* =================================================
-                   START TRANSACTION
-                ================================================= */
-
                 $conn->begin_transaction();
                 $transaction_started = true;
 
-                /* =================================================
-                   CREATE ORDER
-                ================================================= */
-
+                /*
+                 * Order always starts as Pending.
+                 * GCash starts as Pending Verification.
+                 */
                 $status = "Pending";
 
-                $order_stmt = $conn->prepare(
-                    "INSERT INTO orders
-                    (
-                        user_id,
-                        customer_name,
-                        customer_email,
-                        phone,
-                        address,
-                        total_amount,
-                        payment_method,
-                        gcash_receipt,
-                        status
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                );
-
-                if (!$order_stmt) {
-                    throw new Exception(
-                        "Unable to prepare the order record: " . $conn->error
-                    );
-                }
-
-                $order_stmt->bind_param(
-                    "issssdsss",
+                /* CREATE ORDER */
+                $order_id = createOrder(
+                    $conn,
                     $user_id,
-                    $old["customer_name"],
-                    $old["customer_email"],
-                    $old["phone"],
-                    $old["address"],
+                    $old,
                     $grand_total,
-                    $old["payment_method"],
-                    $old["gcash_receipt"],
                     $status
                 );
 
-                if (!$order_stmt->execute()) {
-                    $db_error = $order_stmt->error;
-                    $order_stmt->close();
-
-                    throw new Exception(
-                        "Order insert failed: " . $db_error
-                    );
-                }
-
-                $order_id = (int) $conn->insert_id;
-
-                $order_stmt->close();
-
-                if ($order_id <= 0) {
-                    throw new Exception("The order ID could not be created.");
-                }
-
-                /* =================================================
-                   CREATE ORDER ITEMS
-                ================================================= */
-
-                $item_stmt = $conn->prepare(
-                    "INSERT INTO order_items
-                    (
-                        order_id,
-                        product_id,
-                        product_name,
-                        price,
-                        quantity,
-                        subtotal
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)"
+                /* CREATE ORDER ITEMS */
+                createOrderItems(
+                    $conn,
+                    $order_id,
+                    $cart_products
                 );
 
-                if (!$item_stmt) {
-                    throw new Exception(
-                        "Unable to prepare order items: " . $conn->error
-                    );
-                }
-
-                foreach ($cart_products as $product) {
-
-                    $product_id = (int) $product["product_id"];
-                    $product_name = (string) $product["name"];
-                    $price = (float) $product["price"];
-                    $quantity = (int) $product["quantity"];
-                    $subtotal = (float) $product["subtotal"];
-
-                    if ($product_id <= 0 || $quantity <= 0) {
-                        throw new Exception("Invalid product in cart.");
-                    }
-
-                    $item_stmt->bind_param(
-                        "iisdid",
-                        $order_id,
-                        $product_id,
-                        $product_name,
-                        $price,
-                        $quantity,
-                        $subtotal
-                    );
-
-                    if (!$item_stmt->execute()) {
-                        $db_error = $item_stmt->error;
-                        $item_stmt->close();
-
-                        throw new Exception(
-                            "Order item insert failed: " . $db_error
-                        );
-                    }
-                }
-
-                $item_stmt->close();
-
-                /* =================================================
-                   REDUCE PRODUCT STOCK
-                ================================================= */
-                $stock_stmt = $conn->prepare(
-                    "UPDATE products
-                     SET stock = stock - ?
-                     WHERE id = ?
-                       AND stock >= ?"
+                /* DEDUCT STOCK */
+                reduceStock(
+                    $conn,
+                    $cart_products
                 );
 
-                if (!$stock_stmt) {
-                    throw new Exception(
-                        "Unable to prepare stock update: " . $conn->error
-                    );
-                }
-
-                foreach ($cart_products as $product) {
-                    $product_id = (int) $product["product_id"];
-                    $quantity = (int) $product["quantity"];
-
-                    if ($product_id <= 0 || $quantity <= 0) {
-                        throw new Exception("Invalid product quantity in cart.");
-                    }
-
-                    $stock_stmt->bind_param(
-                        "iii",
-                        $quantity,
-                        $product_id,
-                        $quantity
-                    );
-
-                    if (!$stock_stmt->execute()) {
-                        $db_error = $stock_stmt->error;
-                        $stock_stmt->close();
-                        throw new Exception(
-                            "Stock update failed: " . $db_error
-                        );
-                    }
-
-                    if ($stock_stmt->affected_rows !== 1) {
-                        $stock_stmt->close();
-                        throw new Exception(
-                            "Not enough stock available for " .
-                            (string) $product["name"] . "."
-                        );
-                    }
-                }
-
-                $stock_stmt->close();
-
-                /* =================================================
-                   AUTO MARK SOLD-OUT PRODUCTS INACTIVE
-                ================================================= */
-                $conn->query(
-                    "UPDATE products
-                     SET status = 'unavailable'
-                     WHERE stock <= 0"
+                /* CLEAR USER CART */
+                clearUserCart(
+                    $conn,
+                    $user_id
                 );
 
-                /* =================================================
-                   CLEAR DATABASE CART
-                ================================================= */
-
-                $clear_stmt = $conn->prepare(
-                    "DELETE FROM cart
-                     WHERE user_id = ?"
-                );
-
-                if (!$clear_stmt) {
-                    throw new Exception(
-                        "Unable to prepare cart cleanup: " . $conn->error
-                    );
-                }
-
-                $clear_stmt->bind_param("i", $user_id);
-
-                if (!$clear_stmt->execute()) {
-                    $db_error = $clear_stmt->error;
-                    $clear_stmt->close();
-
-                    throw new Exception(
-                        "Cart cleanup failed: " . $db_error
-                    );
-                }
-
-                $clear_stmt->close();
-
-                /* =================================================
-                   COMMIT EVERYTHING
-                ================================================= */
-
+                /* COMMIT */
                 if (!$conn->commit()) {
-                    throw new Exception("The order could not be committed.");
+                    throw new Exception(
+                        "The order could not be committed."
+                    );
                 }
 
                 $transaction_started = false;
 
                 /*
-                 * The order is now permanently stored in:
-                 *   orders
-                 *   order_items
-                 *
-                 * Its initial status is Pending, so the admin
-                 * Orders page can display and manage it.
+                 * SUCCESS:
+                 * Customer goes to My Orders and can track it.
                  */
-                header("Location: orders.php?success=1&order=" . $order_id);
+                header(
+                    "Location: orders.php?success=1&order=" .
+                    $order_id
+                );
                 exit();
 
             } catch (Throwable $e) {
@@ -504,25 +831,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 }
 
                 error_log(
-                    "Cafelia checkout error for user {$user_id}: " .
+                    "Cafelia checkout transaction error " .
+                    "for user {$user_id}: " .
                     $e->getMessage()
                 );
 
+                /*
+                 * Show the actual reason during local XAMPP
+                 * development so database mismatches are easy
+                 * to identify instead of showing only a generic
+                 * message.
+                 */
                 $error =
-                    "We couldn't place your order right now. " .
-                    "Please check your information and try again.";
+                    "Order could not be placed: " .
+                    $e->getMessage();
             }
+
+        } catch (Throwable $e) {
+
+            error_log(
+                "Cafelia checkout validation/cart error " .
+                "for user {$user_id}: " .
+                $e->getMessage()
+            );
+
+            $error = $e->getMessage();
         }
     }
 }
 
 /* =========================================================
-   RELOAD CART COUNT AFTER POST FAILURE
-========================================================= */
+   REFRESH CART COUNT
+   ========================================================= */
 
-$cart_count = getCartCount($conn, $user_id);
+$cart_count =
+    getCartCount(
+        $conn,
+        $user_id
+    );
 
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -1103,11 +1452,11 @@ $cart_count = getCartCount($conn, $user_id);
             position: relative;
         }
 
-       .payment-option > input[type="radio"] {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
+        .payment-option > input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
 
         .payment-option label {
             display: flex;
@@ -1128,7 +1477,7 @@ $cart_count = getCartCount($conn, $user_id);
             transform: translateY(-1px);
         }
 
-       .payment-option > input[type="radio"]:checked + label {
+        .payment-option > input[type="radio"]:checked + label {
             border-color: var(--caramel);
             background: #fff8f0;
             box-shadow: 0 0 0 3px rgba(185,130,79,.09);
@@ -1199,15 +1548,27 @@ $cart_count = getCartCount($conn, $user_id);
     border: 1px solid rgba(72,45,31,.14);
     border-radius: 9px;
     background: #fffdfa;
-    color: #30211b;
     outline: none;
-    opacity: 1;
-    pointer-events: auto;
-    position: relative;
 }
 .gcash-receipt-field input:focus {
     border-color: #b98252;
     box-shadow: 0 0 0 3px rgba(185,130,82,.10);
+}
+.gcash-receipt-field input[type="file"] {
+    min-height: 46px;
+    padding: 10px 12px;
+    background: #fffdfa;
+    cursor: pointer;
+}
+
+.gcash-proof-note {
+    margin-top: 8px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: rgba(63,118,86,.07);
+    color: #4c705b;
+    font-size: 10px;
+    line-height: 1.5;
 }
 .gcash-receipt-field small {
     display: block;
@@ -1862,7 +2223,7 @@ $cart_count = getCartCount($conn, $user_id);
                                 name="customer_name"
                                 value="<?php echo e($old["customer_name"]); ?>"
                                 placeholder="Your full name"
-                                maxlength="100"
+                                maxlength="20"
                                 autocomplete="name"
                                 required
                             >
@@ -2022,19 +2383,27 @@ $cart_count = getCartCount($conn, $user_id);
                             </label>
 
                             <div class="gcash-receipt-field" id="gcashReceiptField" style="display:none;">
+
                                 <label for="gcash_receipt">
-                                    GCash Receipt / Reference Number <span class="required">*</span>
+                                    GCash Reference Number <span class="required">*</span>
                                 </label>
+
                                 <input
                                     type="text"
                                     id="gcash_receipt"
                                     name="gcash_receipt"
                                     value="<?php echo e($old["gcash_receipt"]); ?>"
-                                    maxlength="100"
-                                    placeholder="Enter your GCash receipt/reference number"
+                                    maxlength="20"
+                                    inputmode="numeric"
+                                    pattern="[0-9]+"
+                                    placeholder="Enter GCash reference number"
                                     autocomplete="off"
                                 >
-                                <small>Enter the receipt/reference number shown after your GCash payment.</small>
+
+                                <small>
+                                    Enter the GCash reference number shown after your payment. Numbers only.
+                                </small>
+
                             </div>
 
                         </div>
@@ -2425,6 +2794,20 @@ function updateGcashReceiptField() {
         gcashReceiptInput.required = !!isGcash;
         if (!isGcash) gcashReceiptInput.value = "";
     }
+
+}
+
+const gcashReferenceInput = document.getElementById("gcash_receipt");
+
+if (gcashReferenceInput) {
+    // The reference number is a normal text field, not a payment radio input.
+    // Explicitly restore normal mouse/keyboard interaction.
+    gcashReferenceInput.style.pointerEvents = "auto";
+    gcashReferenceInput.style.position = "relative";
+    gcashReferenceInput.style.opacity = "1";
+    gcashReferenceInput.addEventListener("input", function () {
+        this.value = this.value.replace(/\D/g, "");
+    });
 }
 
 paymentInputs.forEach(function(input) {
@@ -2432,109 +2815,6 @@ paymentInputs.forEach(function(input) {
 });
 
 updateGcashReceiptField();
-
-/* =========================================================
-   PREVENT DOUBLE SUBMISSION
-========================================================= */
-
-const checkoutForm =
-    document.getElementById("checkoutForm");
-
-const placeOrderBtn =
-    document.getElementById("placeOrderBtn");
-
-if (checkoutForm && placeOrderBtn) {
-
-    checkoutForm.addEventListener(
-        "submit",
-        function () {
-
-            placeOrderBtn.disabled = true;
-
-            placeOrderBtn.style.opacity = ".72";
-            placeOrderBtn.style.cursor = "wait";
-
-            placeOrderBtn.textContent =
-                "Placing Order...";
-
-        }
-    );
-}
-
-</script>
-
-</body>
-</html>
-     }
-        });
-
-    const isOpen =
-        menu.classList.toggle("open");
-
-    button.setAttribute(
-        "aria-expanded",
-        isOpen ? "true" : "false"
-    );
-}
-
-
-document.addEventListener(
-    "click",
-    function (event) {
-
-        document
-            .querySelectorAll(".account-menu.open")
-            .forEach(function (menu) {
-
-                if (!menu.contains(event.target)) {
-
-                    menu.classList.remove("open");
-
-                    const trigger =
-                        menu.querySelector(
-                            ".account-trigger"
-                        );
-
-                    if (trigger) {
-                        trigger.setAttribute(
-                            "aria-expanded",
-                            "false"
-                        );
-                    }
-                }
-            });
-    }
-);
-
-
-document.addEventListener(
-    "keydown",
-    function (event) {
-
-        if (event.key === "Escape") {
-
-            document
-                .querySelectorAll(".account-menu.open")
-                .forEach(function (menu) {
-
-                    menu.classList.remove("open");
-
-                    const trigger =
-                        menu.querySelector(
-                            ".account-trigger"
-                        );
-
-                    if (trigger) {
-                        trigger.setAttribute(
-                            "aria-expanded",
-                            "false"
-                        );
-                    }
-                });
-        }
-    }
-);
-
 
 /* =========================================================
    PREVENT DOUBLE SUBMISSION

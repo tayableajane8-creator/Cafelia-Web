@@ -68,12 +68,13 @@ if (
         }
 
         /* One customer may add a maximum of 5 units of one product. */
+        /* Read ALL matching rows so old duplicate cart records are merged safely. */
         $cart_stmt = $conn->prepare(
             "SELECT id, quantity
              FROM cart
              WHERE user_id = ?
                AND product_id = ?
-             LIMIT 1
+             ORDER BY id ASC
              FOR UPDATE"
         );
 
@@ -83,10 +84,16 @@ if (
 
         $cart_stmt->bind_param("ii", $user_id, $product_id);
         $cart_stmt->execute();
-        $existing = $cart_stmt->get_result()->fetch_assoc();
+        $cart_result = $cart_stmt->get_result();
+
+        $existing_quantity = 0;
+
+        while ($cart_row = $cart_result->fetch_assoc()) {
+            $existing_quantity += (int) $cart_row["quantity"];
+        }
+
         $cart_stmt->close();
 
-        $existing_quantity = $existing ? (int) $existing["quantity"] : 0;
         $new_quantity = $existing_quantity + $quantity;
 
         if ($new_quantity > 5) {
@@ -101,45 +108,36 @@ if (
             );
         }
 
-        if ($existing) {
-            $update_stmt = $conn->prepare(
-                "UPDATE cart
-                 SET quantity = ?, updated_at = CURRENT_TIMESTAMP
-                 WHERE id = ? AND user_id = ?"
-            );
+        /* Normalize this product to exactly one cart row. */
+        $delete_stmt = $conn->prepare(
+            "DELETE FROM cart WHERE user_id = ? AND product_id = ?"
+        );
 
-            if (!$update_stmt) {
-                throw new Exception("Unable to update your cart.");
-            }
-
-            $cart_id = (int) $existing["id"];
-            $update_stmt->bind_param("iii", $new_quantity, $cart_id, $user_id);
-
-            if (!$update_stmt->execute()) {
-                $update_stmt->close();
-                throw new Exception("Unable to update your cart.");
-            }
-
-            $update_stmt->close();
-        } else {
-            $insert_stmt = $conn->prepare(
-                "INSERT INTO cart (user_id, product_id, quantity)
-                 VALUES (?, ?, ?)"
-            );
-
-            if (!$insert_stmt) {
-                throw new Exception("Unable to add the item to your cart.");
-            }
-
-            $insert_stmt->bind_param("iii", $user_id, $product_id, $quantity);
-
-            if (!$insert_stmt->execute()) {
-                $insert_stmt->close();
-                throw new Exception("Unable to add the item to your cart.");
-            }
-
-            $insert_stmt->close();
+        if (!$delete_stmt) {
+            throw new Exception("Unable to clean your cart.");
         }
+
+        $delete_stmt->bind_param("ii", $user_id, $product_id);
+        $delete_stmt->execute();
+        $delete_stmt->close();
+
+        $insert_stmt = $conn->prepare(
+            "INSERT INTO cart (user_id, product_id, quantity)
+             VALUES (?, ?, ?)"
+        );
+
+        if (!$insert_stmt) {
+            throw new Exception("Unable to add the item to your cart.");
+        }
+
+        $insert_stmt->bind_param("iii", $user_id, $product_id, $new_quantity);
+
+        if (!$insert_stmt->execute()) {
+            $insert_stmt->close();
+            throw new Exception("Unable to add the item to your cart.");
+        }
+
+        $insert_stmt->close();
 
         $count_stmt = $conn->prepare(
             "SELECT COALESCE(SUM(quantity), 0) AS cart_count
@@ -244,9 +242,10 @@ $cart_count = 0;
 
 if ($user_id > 0) {
     $cart_stmt = $conn->prepare(
-        "SELECT product_id, quantity
+        "SELECT product_id, SUM(quantity) AS quantity
          FROM cart
-         WHERE user_id = ?"
+         WHERE user_id = ?
+         GROUP BY product_id"
     );
 
     if ($cart_stmt) {

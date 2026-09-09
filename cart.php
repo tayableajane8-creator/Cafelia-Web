@@ -23,7 +23,7 @@ $user_id = (int) $_SESSION["user_id"];
 // CART RULES
 // ==========================================
 
-const MAX_ORDER_QUANTITY = 6;
+const MAX_ORDER_QUANTITY = 5;
 
 $cart_message = "";
 $cart_message_type = "";
@@ -180,6 +180,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["action"] ?? "") === "updat
                 }
             }
         }
+    }
+
+    // If the customer clicked "Proceed to Checkout",
+    // save the current cart quantities first, then continue.
+    if (($_POST["redirect"] ?? "") === "checkout.php") {
+        header("Location: checkout.php");
+        exit();
     }
 
     header("Location: cart.php");
@@ -1255,9 +1262,15 @@ a{text-decoration:none}
                 <strong id="cartTotal">₱<?php echo number_format($grand_total, 2); ?></strong>
             </div>
 
-            <a href="checkout.php" class="checkout-button">
+            <button
+                type="submit"
+                form="cart-form"
+                class="checkout-button"
+                name="redirect"
+                value="checkout.php"
+            >
                 Proceed to Checkout
-            </a>
+            </button>
 
             <a href="menu.php" class="continue-shopping">
                 ← Continue Shopping
